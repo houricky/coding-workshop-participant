@@ -192,6 +192,14 @@ terraform.rc
 # Ignore VS Code files
 .vscode
 
+# Ignore embedded Python library packages installed inside backend services
+backend/*/jwt/
+backend/*/psycopg/
+backend/*/psycopg-*.dist-info/
+backend/*/psycopg_binary.libs/
+backend/*/PyJWT-*.dist-info/
+backend/*/typing_extensions-*.dist-info/
+
 # app ignores
 app/data-collector/target
 app/db
