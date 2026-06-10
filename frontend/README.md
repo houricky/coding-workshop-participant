@@ -34,11 +34,11 @@ in `.env`:
 
 ```env
 VITE_USE_MOCK=false
-VITE_API_BASE_URL=http://localhost:8000
+VITE_API_BASE_URL=http://localhost:3001
 ```
 
-With `VITE_USE_MOCK=false`, every call goes to the FastAPI service via the axios
-client in `src/services/httpClient.js`, which attaches the JWT as a
+With `VITE_USE_MOCK=false`, every call goes to the local CORS proxy via the
+axios client in `src/services/httpClient.js`, which attaches the JWT as a
 `Bearer` token and redirects to `/login` on a `401`. The endpoint paths in
 `api.js` already match the documented API (`/auth/*`, `/projects`,
 `/projects/:id/summary`, `/employees`, `/allocations`, `/usage`,

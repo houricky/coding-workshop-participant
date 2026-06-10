@@ -5,7 +5,7 @@ import logging
 from auth_jwt import get_auth_context
 from http_router import match_path, parse_event
 from postgres_service import get_rag_details, recalculate_rag
-from responses import error_response, json_response
+from responses import error_response, json_response, preflight_response
 from validators import is_valid_uuid
 
 logger = logging.getLogger()
@@ -17,6 +17,9 @@ SERVICE_NAME = "rag-service"
 def handler(event=None, context=None):
     try:
         req = parse_event(event, SERVICE_NAME)
+        if req["method"] == "OPTIONS":
+            return preflight_response()
+
         if not get_auth_context(req["headers"]):
             return error_response(401, "unauthorized", "Missing or invalid token")
 

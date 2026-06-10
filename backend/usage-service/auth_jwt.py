@@ -1,20 +1,52 @@
 """JWT and password utilities for authentication."""
 
 import os
+import hmac
 from datetime import datetime, timedelta, timezone
 
-import bcrypt
 import jwt
+
+
+def _bcrypt_module():
+    try:
+        import bcrypt
+        return bcrypt
+    except Exception:
+        return None
+
+
+def _crypt_hash(password: str, salt: str | None = None) -> str:
+    try:
+        import crypt
+    except ImportError as exc:
+        raise RuntimeError("No password hashing backend available") from exc
+
+    if salt is None:
+        method = getattr(crypt, "METHOD_BLOWFISH", None)
+        if method is None:
+            raise RuntimeError("bcrypt hashing backend unavailable")
+        salt = crypt.mksalt(method)
+
+    hashed = crypt.crypt(password, salt)
+    if not hashed:
+        raise RuntimeError("Password hashing failed")
+    return hashed
 
 
 def hash_password(password: str) -> str:
     """Hash a plaintext password with bcrypt."""
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(12)).decode("utf-8")
+    bcrypt = _bcrypt_module()
+    if bcrypt:
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(12)).decode("utf-8")
+    return _crypt_hash(password)
 
 
 def verify_password(password: str, password_hash: str) -> bool:
     """Verify a plaintext password against a bcrypt hash."""
-    return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    bcrypt = _bcrypt_module()
+    if bcrypt:
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    return hmac.compare_digest(_crypt_hash(password, password_hash), password_hash)
 
 
 def _jwt_secret() -> str:

@@ -5,7 +5,7 @@ import logging
 from auth_jwt import create_token, get_auth_context, hash_password, verify_password
 from http_router import parse_event
 from postgres_service import create_user, get_user_by_email, get_user_by_id
-from responses import error_response, json_response
+from responses import error_response, json_response, preflight_response
 from validators import parse_email, parse_password, require_fields
 
 logger = logging.getLogger()
@@ -18,6 +18,8 @@ def handler(event=None, context=None):
     try:
         req = parse_event(event, SERVICE_NAME)
         method, path, body, headers = req["method"], req["path"], req["body"], req["headers"]
+        if method == "OPTIONS":
+            return preflight_response()
 
         if method == "POST" and path == "/register":
             return register(body)

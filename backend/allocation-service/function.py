@@ -11,7 +11,7 @@ from postgres_service import (
     list_allocations,
     update_allocation,
 )
-from responses import error_response, json_response, no_content
+from responses import error_response, json_response, no_content, preflight_response
 from validators import is_valid_uuid, parse_positive_number, require_fields
 
 logger = logging.getLogger()
@@ -23,6 +23,9 @@ SERVICE_NAME = "allocation-service"
 def handler(event=None, context=None):
     try:
         req = parse_event(event, SERVICE_NAME)
+        if req["method"] == "OPTIONS":
+            return preflight_response()
+
         if not get_auth_context(req["headers"]):
             return error_response(401, "unauthorized", "Missing or invalid token")
 

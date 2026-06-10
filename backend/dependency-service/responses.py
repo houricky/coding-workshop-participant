@@ -5,6 +5,13 @@ from decimal import Decimal
 from datetime import date, datetime
 from uuid import UUID
 
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+    "Access-Control-Max-Age": "86400",
+}
+
 
 def _serialize(obj):
     if isinstance(obj, (datetime, date)):
@@ -22,7 +29,7 @@ def _serialize(obj):
 
 def json_response(status_code: int, body: dict | list | None = None, headers: dict | None = None):
     """Build a Lambda-compatible JSON response."""
-    response_headers = {"Content-Type": "application/json"}
+    response_headers = {"Content-Type": "application/json", **CORS_HEADERS}
     if headers:
         response_headers.update(headers)
     payload = _serialize(body) if body is not None else {}
@@ -43,4 +50,9 @@ def error_response(status_code: int, error: str, message: str, details: dict | N
 
 def no_content():
     """Return 204 No Content."""
-    return {"statusCode": 204, "headers": {"Content-Type": "application/json"}, "body": ""}
+    return {"statusCode": 204, "headers": {"Content-Type": "application/json", **CORS_HEADERS}, "body": ""}
+
+
+def preflight_response():
+    """Return a successful CORS preflight response."""
+    return {"statusCode": 204, "headers": CORS_HEADERS, "body": ""}

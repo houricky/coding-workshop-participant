@@ -16,6 +16,17 @@ const fs = require('fs');
 const path = require('path');
 
 const PORT = 3001;
+const ROUTE_TO_ENDPOINT = {
+  auth: 'auth-service',
+  employees: 'employee-service',
+  projects: 'project-service',
+  budgets: 'budget-service',
+  allocations: 'allocation-service',
+  usage: 'usage-service',
+  dependencies: 'dependency-service',
+  dashboard: 'dashboard-service',
+  rag: 'rag-service',
+};
 
 // Read endpoint mappings from .env.local
 const envFile = path.join(__dirname, '../frontend/.env.local');
@@ -48,34 +59,39 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Parse request path: /api/{endpoint_name}
+  // Parse request path: /api/{endpoint_name} or frontend API paths like /auth/login.
   const parsedUrl = url.parse(req.url);
   const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
 
-  if (pathParts[0] !== 'api' || pathParts.length < 2) {
+  if (pathParts.length === 0) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       message: 'Development CORS Proxy Server',
-      usage: 'GET /api/{endpoint_name}',
-      endpoints: Object.keys(endpoints).map(name => `http://localhost:${PORT}/api/${name}`)
+      usage: 'GET /api/{endpoint_name} or app paths such as /auth/login',
+      endpoints: Object.keys(endpoints).map(name => `http://localhost:${PORT}/api/${name}`),
+      appRoutes: Object.keys(ROUTE_TO_ENDPOINT).map(name => `http://localhost:${PORT}/${name}`)
     }, null, 2));
     return;
   }
 
-  const endpointName = pathParts[1];
-  const remainingPath = pathParts.length > 2 ? '/' + pathParts.slice(2).join('/') : '';
-  const targetUrl = endpoints[endpointName] + remainingPath + (parsedUrl.search || '');
+  const usesServicePath = pathParts[0] === 'api';
+  const endpointName = usesServicePath ? pathParts[1] : ROUTE_TO_ENDPOINT[pathParts[0]];
+  const remainingParts = usesServicePath ? pathParts.slice(2) : pathParts.slice(1);
+  const remainingPath = remainingParts.length > 0 ? '/' + remainingParts.join('/') : '';
 
-  if (!targetUrl) {
+  if (!endpointName || !endpoints[endpointName]) {
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
-      error: `Unknown endpoint: ${endpointName}`,
+      error: `Unknown endpoint: ${pathParts[0]}`,
       available: Object.keys(endpoints)
     }));
     return;
   }
 
-  console.log(`${req.method} /api/${endpointName} -> ${targetUrl}`);
+  const endpointBaseUrl = endpoints[endpointName].replace(/\/+$/, '');
+  const targetUrl = endpointBaseUrl + remainingPath + (parsedUrl.search || '');
+
+  console.log(`${req.method} ${parsedUrl.pathname} -> ${targetUrl}`);
 
   // Parse target URL
   const target = url.parse(targetUrl);
@@ -100,6 +116,7 @@ const server = http.createServer((req, res) => {
     headers: {
       'accept': headers.accept || 'application/json',
       'content-type': headers['content-type'] || 'application/json',
+      ...(headers.authorization ? { 'authorization': headers.authorization } : {}),
       'user-agent': headers['user-agent'] || 'proxy-server',
       'host': target.host
     }
