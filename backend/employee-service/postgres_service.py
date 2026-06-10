@@ -60,6 +60,14 @@ def _project(row: dict | None) -> dict | None:
     }
 
 
+def _deliverable(row: dict) -> dict:
+    return {
+        **row,
+        "employee_id": row.get("assigned_employee_id"),
+        "project": _project(row),
+    }
+
+
 def list_employees(
     department: str | None = None,
     is_active: bool | None = None,
@@ -149,6 +157,18 @@ def get_employee(employee_id: str) -> dict | None:
             cur.execute("SELECT * FROM v_project_summary WHERE project_id = %s", (allocation["project_id"],))
             allocation["project"] = _project(cur.fetchone())
         employee["allocations"] = allocations
+
+        cur.execute(
+            """
+            SELECT pd.*, vps.*
+            FROM project_deliverables pd
+            LEFT JOIN v_project_summary vps ON vps.project_id = pd.project_id
+            WHERE pd.assigned_employee_id = %s
+            ORDER BY pd.due_date, pd.created_at
+            """,
+            (employee_id,),
+        )
+        employee["deliverables"] = [_deliverable(row) for row in cur.fetchall()]
 
         return employee
 

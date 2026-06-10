@@ -1,6 +1,7 @@
 """Project service — CRUD and summary endpoints."""
 
 import logging
+from datetime import date
 
 from auth_jwt import get_auth_context
 from http_router import match_path, parse_event
@@ -20,6 +21,7 @@ logger.setLevel(logging.INFO)
 
 SERVICE_NAME = "project-service"
 VALID_STAGES = {"planning", "active", "on_hold", "completed", "cancelled"}
+VALID_DELIVERABLE_STATUSES = {"pending", "in_progress", "completed"}
 
 
 def handler(event=None, context=None):
@@ -84,6 +86,9 @@ def create(body: dict):
         return error_response(400, "validation_error", err)
     if pct is not None:
         body["actual_completion_percent"] = pct
+    validation_error = validate_initial_deliverables(body)
+    if validation_error:
+        return validation_error
     project = create_project(body)
     return json_response(201, {"project": project})
 
@@ -124,3 +129,34 @@ def remove(project_id: str):
     if not delete_project(project_id):
         return error_response(404, "not_found", "Project not found")
     return no_content()
+
+
+def validate_initial_deliverables(body: dict):
+    deliverables = body.get("deliverables")
+    if deliverables is None:
+        return None
+    if not isinstance(deliverables, list):
+        return error_response(400, "validation_error", "deliverables must be an array")
+    for index, deliverable in enumerate(deliverables):
+        if not isinstance(deliverable, dict):
+            return error_response(400, "validation_error", "Each deliverable must be an object", {"index": index})
+        missing = require_fields(deliverable, ["title", "due_date"])
+        if missing:
+            return error_response(
+                400,
+                "validation_error",
+                "Missing required deliverable fields",
+                {"index": index, "fields": missing},
+            )
+        employee_id = deliverable.get("employee_id", deliverable.get("assigned_employee_id"))
+        if employee_id in ("", None):
+            deliverable["employee_id"] = None
+        elif not is_valid_uuid(employee_id):
+            return error_response(400, "validation_error", "Invalid deliverable employee_id", {"index": index})
+        if deliverable.get("status") and deliverable["status"] not in VALID_DELIVERABLE_STATUSES:
+            return error_response(400, "validation_error", "Invalid deliverable status", {"index": index})
+        try:
+            date.fromisoformat(str(deliverable["due_date"]))
+        except (TypeError, ValueError):
+            return error_response(400, "validation_error", "Deliverable due_date must be an ISO date", {"index": index})
+    return None

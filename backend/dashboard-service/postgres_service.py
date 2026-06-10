@@ -74,6 +74,9 @@ def get_portfolio_dashboard() -> dict:
         "total_allocated_hours": dashboard.get("total_allocated_hours", 0),
         "total_hours_used": dashboard.get("total_hours_used", 0),
         "overallocated_employees": dashboard.get("overallocated_employee_count", 0),
+        "total_deliverables": int(dashboard.get("total_deliverables") or 0),
+        "completed_deliverables": int(dashboard.get("completed_deliverables") or 0),
+        "unassigned_deliverables": int(dashboard.get("unassigned_deliverables") or 0),
         "at_risk_projects": [p for p in projects if p["rag_status"] == "Red"],
         "projects": projects,
     }

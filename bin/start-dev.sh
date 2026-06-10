@@ -115,6 +115,26 @@ fi
 
 echo ""
 
+echo -e "  Applying PostgreSQL schema and seed data..."
+PGHOST_FOR_MIGRATE="${POSTGRES_HOST:-localhost}"
+PGPORT_FOR_MIGRATE="${POSTGRES_PORT:-5432}"
+PGDATABASE_FOR_MIGRATE="${POSTGRES_NAME:-postgres}"
+PGUSER_FOR_MIGRATE="${POSTGRES_USER:-postgres}"
+PGPASS_FOR_MIGRATE="${POSTGRES_PASS:-postgres123}"
+
+# Stale Lambda read transactions can hold relation locks and block local DDL.
+PGPASSWORD="$PGPASS_FOR_MIGRATE" psql -h "$PGHOST_FOR_MIGRATE" -p "$PGPORT_FOR_MIGRATE" -U "$PGUSER_FOR_MIGRATE" -d "$PGDATABASE_FOR_MIGRATE" \
+    -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() AND state LIKE 'idle in transaction%';" \
+    > /dev/null 2>&1 || true
+
+"$PROJECT_ROOT/database/migrate.sh" --seed > /tmp/database-migrate.log 2>&1 || {
+    echo -e "  ✗ Database migration failed"
+    tail -n 50 /tmp/database-migrate.log | sed 's/^/    /'
+    exit 1
+}
+echo -e "  ✓ Database schema and seed data applied"
+echo ""
+
 # ============================================================
 # STEP 2: Check and Start MongoDB
 # ============================================================

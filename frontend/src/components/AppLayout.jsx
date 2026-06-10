@@ -24,6 +24,7 @@ import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import PeopleOutlinedIcon from '@mui/icons-material/PeopleOutlined';
 import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined';
 import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
+import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import { useAuth } from '../context/AuthContext';
 import { USE_MOCK } from '../services/api';
@@ -34,6 +35,7 @@ const DRAWER_WIDTH = 248;
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: <DashboardOutlinedIcon /> },
   { to: '/projects', label: 'Projects', icon: <FolderOutlinedIcon /> },
+  { to: '/deliverables', label: 'Deliverables', icon: <AssignmentOutlinedIcon /> },
   { to: '/employees', label: 'Employees', icon: <PeopleOutlinedIcon /> },
   { to: '/allocations', label: 'Resource Allocation', icon: <EventAvailableOutlinedIcon /> },
   { to: '/usage', label: 'Resource Usage', icon: <TimerOutlinedIcon /> },

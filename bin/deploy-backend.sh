@@ -56,16 +56,20 @@ echo "INFO: Environment - $ENVIRONMENT"
 # Change to infrastructure directory
 cd "$INFRA_DIR"
 
+# Load participant-specific configuration if available. LocalStack deploys need
+# PARTICIPANT_ID/TF_VAR_aws_app_code too, even though credentials are overridden.
+if [ -f "$ENVIRONMENT_CONFIG" ]; then
+    echo "INFO: Loading participant environment configuration..."
+    source $ENVIRONMENT_CONFIG
+fi
+
 # AWS Deployment Configuration
 if [ "$ENVIRONMENT" = "aws" ]; then
     echo "INFO: Using AWS deployment (terraform)..."
 
     # Setup participant if config is missing
     $SCRIPT_DIR/setup-participant.sh
-
-    # Load participant-specific configuration if available
     if [ -f "$ENVIRONMENT_CONFIG" ]; then
-        echo "INFO: Loading participant environment configuration..."
         source $ENVIRONMENT_CONFIG
     else
         echo "WARNING: $ENVIRONMENT_CONFIG is missing"

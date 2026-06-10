@@ -87,6 +87,29 @@ def _usage(row: dict) -> dict:
     }
 
 
+def _deliverable(row: dict) -> dict:
+    assigned_employee_id = row.get("assigned_employee_id")
+    employee = None
+    if assigned_employee_id:
+        employee = _employee({
+            "id": assigned_employee_id,
+            "first_name": row.get("first_name"),
+            "last_name": row.get("last_name"),
+            "email": row.get("email"),
+            "role": row.get("employee_role"),
+            "job_title": row.get("job_title"),
+            "is_direct_staff": row.get("is_direct_staff"),
+            "work_location": row.get("work_location"),
+            "hourly_rate": row.get("employee_hourly_rate"),
+            "weekly_capacity_hours": row.get("weekly_capacity_hours"),
+        })
+    return {
+        **row,
+        "employee_id": assigned_employee_id,
+        "employee": employee,
+    }
+
+
 def list_projects(stage: str | None = None, rag_status: str | None = None, search: str | None = None) -> list:
     conn = get_connection()
     conditions = []
@@ -165,6 +188,20 @@ def get_project(project_id: str) -> dict | None:
 
         cur.execute(
             """
+            SELECT pd.*, e.first_name, e.last_name, e.email, e.role AS employee_role, e.job_title,
+                   e.is_direct_staff, e.work_location,
+                   e.hourly_rate AS employee_hourly_rate, e.weekly_capacity_hours
+            FROM project_deliverables pd
+            LEFT JOIN employees e ON e.id = pd.assigned_employee_id
+            WHERE pd.project_id = %s
+            ORDER BY pd.due_date, pd.created_at
+            """,
+            (project_id,),
+        )
+        project["deliverables"] = [_deliverable(row) for row in cur.fetchall()]
+
+        cur.execute(
+            """
             SELECT pd.id, pd.project_id, pd.depends_on_project_id, pd.dependency_type, pd.created_at
             FROM project_dependencies pd
             WHERE pd.project_id = %s
@@ -203,6 +240,10 @@ def create_project(data: dict) -> dict:
     if get_employee_role(manager_id) != "manager":
         raise ValueError("Project manager must be an employee with the manager role")
 
+    deliverables = data.get("deliverables") or []
+    if not isinstance(deliverables, list):
+        raise ValueError("deliverables must be an array")
+
     conn = get_connection()
     try:
         with conn.cursor() as cur:
@@ -223,8 +264,40 @@ def create_project(data: dict) -> dict:
                 ),
             )
             row = cur.fetchone()
+
+            for deliverable in deliverables:
+                assigned_employee_id = deliverable.get("employee_id", deliverable.get("assigned_employee_id"))
+                if assigned_employee_id:
+                    cur.execute(
+                        """
+                        SELECT 1
+                        FROM project_resource_allocations
+                        WHERE project_id = %s AND employee_id = %s
+                        """,
+                        (row["id"], assigned_employee_id),
+                    )
+                    if not cur.fetchone():
+                        raise ValueError("Assigned employee must be allocated to this project")
+                cur.execute(
+                    """
+                    INSERT INTO project_deliverables
+                        (project_id, title, description, due_date, assigned_employee_id, status)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        row["id"],
+                        deliverable["title"],
+                        deliverable.get("description"),
+                        deliverable["due_date"],
+                        assigned_employee_id,
+                        deliverable.get("status", "pending"),
+                    ),
+                )
             conn.commit()
             return get_project(row["id"])
+    except ValueError:
+        conn.rollback()
+        raise
     except Exception:
         conn.rollback()
         reset_connection()

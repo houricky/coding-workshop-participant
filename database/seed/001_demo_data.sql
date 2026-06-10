@@ -14,6 +14,19 @@ WHERE id IN (
     '77777777-7777-7777-7777-777777777709'
 );
 
+DELETE FROM project_deliverables
+WHERE id IN (
+    '88888888-8888-8888-8888-888888888801',
+    '88888888-8888-8888-8888-888888888802',
+    '88888888-8888-8888-8888-888888888803',
+    '88888888-8888-8888-8888-888888888804',
+    '88888888-8888-8888-8888-888888888805',
+    '88888888-8888-8888-8888-888888888806',
+    '88888888-8888-8888-8888-888888888807',
+    '88888888-8888-8888-8888-888888888808',
+    '88888888-8888-8888-8888-888888888809'
+);
+
 DELETE FROM app_users
 WHERE id IN (
     '66666666-6666-6666-6666-666666666602',
@@ -221,6 +234,41 @@ ON CONFLICT (id) DO UPDATE SET
     hours_used = EXCLUDED.hours_used,
     cost_amount = EXCLUDED.cost_amount,
     description = EXCLUDED.description;
+
+-- Demo deliverables
+INSERT INTO project_deliverables (id, project_id, title, description, due_date, assigned_employee_id, status)
+VALUES
+    ('88888888-8888-8888-8888-888888888801', '22222222-2222-2222-2222-222222222201',
+     'Cloud landing zone approved', 'Finalize account structure, networking, and access guardrails.', '2025-03-15',
+     '11111111-1111-1111-1111-111111111102', 'completed'),
+    ('88888888-8888-8888-8888-888888888802', '22222222-2222-2222-2222-222222222201',
+     'Legacy API migration plan', 'Document service-by-service migration sequencing.', '2025-06-30',
+     '11111111-1111-1111-1111-111111111101', 'in_progress'),
+    ('88888888-8888-8888-8888-888888888803', '22222222-2222-2222-2222-222222222201',
+     'Operations handoff checklist', NULL, '2025-11-15', NULL, 'pending'),
+    ('88888888-8888-8888-8888-888888888804', '22222222-2222-2222-2222-222222222202',
+     'Portal design prototype', 'Clickable flows for account and case management.', '2025-04-15',
+     '11111111-1111-1111-1111-111111111103', 'completed'),
+    ('88888888-8888-8888-8888-888888888805', '22222222-2222-2222-2222-222222222202',
+     'Authentication integration', 'Connect customer identity provider and session flows.', '2025-07-31',
+     '11111111-1111-1111-1111-111111111101', 'in_progress'),
+    ('88888888-8888-8888-8888-888888888806', '22222222-2222-2222-2222-222222222202',
+     'Support content migration', NULL, '2025-09-01', NULL, 'pending'),
+    ('88888888-8888-8888-8888-888888888807', '22222222-2222-2222-2222-222222222203',
+     'Warehouse architecture brief', 'Select ingestion and modeling approach.', '2025-07-15',
+     '11111111-1111-1111-1111-111111111102', 'in_progress'),
+    ('88888888-8888-8888-8888-888888888808', '22222222-2222-2222-2222-222222222203',
+     'Source system inventory', NULL, '2025-08-31', NULL, 'pending'),
+    ('88888888-8888-8888-8888-888888888809', '22222222-2222-2222-2222-222222222203',
+     'Analytics access model', 'Define role-based access for analysts and managers.', '2025-10-15',
+     '11111111-1111-1111-1111-111111111102', 'pending')
+ON CONFLICT (id) DO UPDATE SET
+    project_id = EXCLUDED.project_id,
+    title = EXCLUDED.title,
+    description = EXCLUDED.description,
+    due_date = EXCLUDED.due_date,
+    assigned_employee_id = EXCLUDED.assigned_employee_id,
+    status = EXCLUDED.status;
 
 -- Demo admin user (password: admin123)
 INSERT INTO app_users (id, email, password_hash, role, employee_id)

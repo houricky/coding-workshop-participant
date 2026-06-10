@@ -5,17 +5,22 @@ import {
   Table, TableHead, TableBody, TableRow, TableCell, Avatar, Alert, IconButton, Tooltip, LinearProgress, Link,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined';
-import { PageHeader, LoadingState } from '../components/ui';
+import { PageHeader, LoadingState, ConfirmDialog } from '../components/ui';
 import RagChip from '../components/RagChip';
 import HealthGauge from '../components/HealthGauge';
 import ProjectFormDialog from '../components/ProjectFormDialog';
-import { employees as employeesApi, projects as projectsApi, apiErrorMessage } from '../services/api';
+import DeliverableFormDialog from '../components/DeliverableFormDialog';
+import { deliverables as deliverablesApi, employees as employeesApi, projects as projectsApi, apiErrorMessage } from '../services/api';
 import { money, hours, percent, formatDate, initials, clampPercent } from '../utils/format';
 import { ragMeta } from '../theme';
 
 const projectRoleLabel = (role) => ({ manager: 'Manager', employee: 'Employee' }[role] || 'Employee');
+const deliverableStatusLabel = (status) => ({ pending: 'Pending', in_progress: 'In progress', completed: 'Completed' }[status] || status || 'Pending');
+const deliverableStatusColor = (status) => ({ completed: 'success', in_progress: 'warning', pending: 'default' }[status] || 'default');
 
 function MetricRow({ label, used, allocated, formatter, accentOver = 90 }) {
   const pct = allocated > 0 ? (used / allocated) * 100 : 0;
@@ -41,6 +46,9 @@ export default function ProjectDetailPage() {
   const [employees, setEmployees] = useState([]);
   const [error, setError] = useState('');
   const [editOpen, setEditOpen] = useState(false);
+  const [deliverableOpen, setDeliverableOpen] = useState(false);
+  const [deliverableToEdit, setDeliverableToEdit] = useState(null);
+  const [deliverableToDelete, setDeliverableToDelete] = useState(null);
 
   const load = useCallback(() => {
     setError('');
@@ -53,6 +61,33 @@ export default function ProjectDetailPage() {
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!p) return <LoadingState label="Loading project" />;
   const managerOptions = employees.filter((e) => e.role === 'manager');
+  const deliverableRows = p.deliverables || [];
+  const assigneeOptions = (p.allocations || [])
+    .map((allocation) => allocation.employee)
+    .filter(Boolean)
+    .filter((employee, index, rows) => rows.findIndex((candidate) => candidate.id === employee.id) === index);
+
+  const openDeliverableDialog = (deliverable = null) => {
+    setDeliverableToEdit(deliverable);
+    setDeliverableOpen(true);
+  };
+  const closeDeliverableDialog = () => {
+    setDeliverableOpen(false);
+    setDeliverableToEdit(null);
+  };
+  const saveDeliverable = async (payload) => {
+    if (deliverableToEdit?.id) {
+      await deliverablesApi.update(deliverableToEdit.id, payload);
+    } else {
+      await deliverablesApi.create(payload);
+    }
+    load();
+  };
+  const confirmDeleteDeliverable = async () => {
+    await deliverablesApi.remove(deliverableToDelete.id);
+    setDeliverableToDelete(null);
+    load();
+  };
 
   return (
     <Box>
@@ -196,10 +231,83 @@ export default function ProjectDetailPage() {
             </CardContent>
           </Card>
         </Grid>
+
+        {/* Deliverables */}
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={1.5}>
+                <Typography variant="overline" color="text.secondary">Deliverables</Typography>
+                <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => openDeliverableDialog()}>
+                  Add deliverable
+                </Button>
+              </Stack>
+              <Table size="small" sx={{ mt: 1 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Title</TableCell>
+                    <TableCell>Assignee</TableCell>
+                    <TableCell>Due date</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {deliverableRows.length === 0 && (
+                    <TableRow><TableCell colSpan={5}><Typography variant="body2" color="text.secondary">No deliverables yet.</Typography></TableCell></TableRow>
+                  )}
+                  {deliverableRows.map((deliverable) => (
+                    <TableRow key={deliverable.id} hover>
+                      <TableCell>
+                        <Box>
+                          <Typography variant="body2">{deliverable.title}</Typography>
+                          {deliverable.description && (
+                            <Typography variant="caption" color="text.secondary">{deliverable.description}</Typography>
+                          )}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        {deliverable.employee?.name ? (
+                          <Link component="button" underline="hover" onClick={() => navigate(`/employees/${deliverable.employee_id || deliverable.assigned_employee_id}`)}>
+                            {deliverable.employee.name}
+                          </Link>
+                        ) : (
+                          <Chip size="small" variant="outlined" label="Unassigned" />
+                        )}
+                      </TableCell>
+                      <TableCell className="tnum">{formatDate(deliverable.due_date)}</TableCell>
+                      <TableCell>
+                        <Chip size="small" color={deliverableStatusColor(deliverable.status)}
+                          label={deliverableStatusLabel(deliverable.status)} />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Tooltip title="Edit">
+                          <IconButton size="small" onClick={() => openDeliverableDialog(deliverable)}>
+                            <EditOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete">
+                          <IconButton size="small" onClick={() => setDeliverableToDelete(deliverable)}>
+                            <DeleteOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </Grid>
       </Grid>
 
       <ProjectFormDialog open={editOpen} initial={p} managerOptions={managerOptions} onClose={() => setEditOpen(false)}
         onSubmit={async (payload) => { await projectsApi.update(p.id, payload); load(); }} />
+      <DeliverableFormDialog open={deliverableOpen} initial={deliverableToEdit} projectId={p.id}
+        assigneeOptions={assigneeOptions} onClose={closeDeliverableDialog} onSubmit={saveDeliverable} />
+      <ConfirmDialog open={!!deliverableToDelete} title="Delete deliverable?" confirmLabel="Delete"
+        message={`Delete ${deliverableToDelete?.title || 'this deliverable'}?`}
+        onClose={() => setDeliverableToDelete(null)} onConfirm={confirmDeleteDeliverable} />
     </Box>
   );
 }

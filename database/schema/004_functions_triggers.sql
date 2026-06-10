@@ -22,6 +22,56 @@ RETURNS NUMERIC AS $$
     WHERE project_id = p_project_id;
 $$ LANGUAGE sql STABLE;
 
+CREATE OR REPLACE FUNCTION fn_project_deliverable_count(p_project_id UUID, p_status TEXT DEFAULT NULL)
+RETURNS INTEGER AS $$
+DECLARE
+    v_count INTEGER := 0;
+BEGIN
+    IF to_regclass('project_deliverables') IS NULL THEN
+        RETURN 0;
+    END IF;
+
+    IF p_status IS NULL THEN
+        EXECUTE 'SELECT COUNT(*) FROM project_deliverables WHERE project_id = $1'
+        INTO v_count
+        USING p_project_id;
+    ELSE
+        EXECUTE 'SELECT COUNT(*) FROM project_deliverables WHERE project_id = $1 AND status::text = $2'
+        INTO v_count
+        USING p_project_id, p_status;
+    END IF;
+
+    RETURN COALESCE(v_count, 0);
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+CREATE OR REPLACE FUNCTION fn_deliverable_count(p_status TEXT DEFAULT NULL, p_unassigned BOOLEAN DEFAULT NULL)
+RETURNS INTEGER AS $$
+DECLARE
+    v_count INTEGER := 0;
+    v_sql TEXT := 'SELECT COUNT(*) FROM project_deliverables WHERE TRUE';
+BEGIN
+    IF to_regclass('project_deliverables') IS NULL THEN
+        RETURN 0;
+    END IF;
+
+    IF p_status IS NOT NULL THEN
+        v_sql := v_sql || ' AND status::text = $1';
+    END IF;
+    IF p_unassigned IS TRUE THEN
+        v_sql := v_sql || ' AND assigned_employee_id IS NULL';
+    END IF;
+
+    IF p_status IS NULL THEN
+        EXECUTE v_sql INTO v_count;
+    ELSE
+        EXECUTE v_sql INTO v_count USING p_status;
+    END IF;
+
+    RETURN COALESCE(v_count, 0);
+END;
+$$ LANGUAGE plpgsql STABLE;
+
 CREATE OR REPLACE FUNCTION fn_refresh_budget_used(p_project_id UUID)
 RETURNS VOID AS $$
 BEGIN
@@ -182,6 +232,15 @@ DROP TRIGGER IF EXISTS trg_usage_updated_at ON project_resource_usage;
 CREATE TRIGGER trg_usage_updated_at
     BEFORE UPDATE ON project_resource_usage
     FOR EACH ROW EXECUTE PROCEDURE fn_set_updated_at();
+
+DO $$ BEGIN
+    IF to_regclass('project_deliverables') IS NOT NULL THEN
+        DROP TRIGGER IF EXISTS trg_deliverables_updated_at ON project_deliverables;
+        CREATE TRIGGER trg_deliverables_updated_at
+            BEFORE UPDATE ON project_deliverables
+            FOR EACH ROW EXECUTE PROCEDURE fn_set_updated_at();
+    END IF;
+END $$;
 
 DROP TRIGGER IF EXISTS trg_usage_rag ON project_resource_usage;
 CREATE TRIGGER trg_usage_rag

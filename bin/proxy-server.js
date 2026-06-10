@@ -25,6 +25,7 @@ const ROUTE_TO_ENDPOINT = {
   allocations: 'allocation-service',
   usage: 'usage-service',
   dependencies: 'dependency-service',
+  deliverables: 'deliverable-service',
   dashboard: 'dashboard-service',
   rag: 'rag-service',
 };

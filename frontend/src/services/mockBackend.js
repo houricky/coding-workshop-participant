@@ -67,6 +67,14 @@ const db = {
     { id: 'd1', project_id: 'p3', depends_on_project_id: 'p1' },
     { id: 'd2', project_id: 'p2', depends_on_project_id: 'p4' },
   ],
+  deliverables: [
+    { id: 'dl1', project_id: 'p1', title: 'Information architecture approved', description: 'Final navigation and content model.', due_date: '2026-01-30', assigned_employee_id: 'e2', status: 'completed' },
+    { id: 'dl2', project_id: 'p1', title: 'Portal shell implemented', description: 'Responsive authenticated app frame.', due_date: '2026-02-28', assigned_employee_id: 'e4', status: 'in_progress' },
+    { id: 'dl3', project_id: 'p1', title: 'UAT checklist', description: '', due_date: '2026-03-20', assigned_employee_id: null, status: 'pending' },
+    { id: 'dl4', project_id: 'p2', title: 'Ledger mapping signed off', description: 'Field-level mapping from legacy billing.', due_date: '2026-03-15', assigned_employee_id: 'e3', status: 'in_progress' },
+    { id: 'dl5', project_id: 'p3', title: 'Offline sync prototype', description: 'Conflict handling and sync retry behavior.', due_date: '2026-04-10', assigned_employee_id: 'e4', status: 'pending' },
+    { id: 'dl6', project_id: 'p5', title: 'Access review complete', description: 'Review admin roles and privileged paths.', due_date: '2026-02-12', assigned_employee_id: 'e5', status: 'completed' },
+  ],
 };
 
 // --- Derivation helpers ----------------------------------------------------
@@ -75,6 +83,7 @@ const rateOf = (empId) => db.employees.find((e) => e.id === empId)?.hourly_rate 
 function deriveProject(p) {
   const allocs = db.allocations.filter((a) => a.project_id === p.id);
   const uses = db.usage.filter((u) => u.project_id === p.id);
+  const deliverables = db.deliverables.filter((d) => d.project_id === p.id);
   const allocated_hours = allocs.reduce((s, a) => s + a.allocated_hours, 0);
   const allocated_cost = allocs.reduce((s, a) => s + a.allocated_hours * rateOf(a.employee_id), 0);
   const hours_used = uses.reduce((s, u) => s + u.hours_used, 0);
@@ -101,6 +110,8 @@ function deriveProject(p) {
     hours_used_percent: Number(r.hoursUsedPercent.toFixed(1)),
     team_size: new Set(allocs.map((a) => a.employee_id)).size,
     manager_count: managerIds.size,
+    deliverable_count: deliverables.length,
+    completed_deliverable_count: deliverables.filter((d) => d.status === 'completed').length,
     project_manager: db.employees.find((e) => e.id === p.project_manager_id) || null,
   };
 }
@@ -120,6 +131,29 @@ function deriveEmployee(e) {
       : 0,
     overallocated: allocated_hours > e.capacity_hours,
   };
+}
+
+function deriveDeliverable(d) {
+  const employee = d.assigned_employee_id
+    ? db.employees.find((e) => e.id === d.assigned_employee_id) || null
+    : null;
+  const project = db.projects.find((p) => p.id === d.project_id) || null;
+  return {
+    ...d,
+    employee_id: d.assigned_employee_id,
+    employee,
+    project: project ? { id: project.id, name: project.name, stage: project.stage } : null,
+  };
+}
+
+function assertDeliverableAssignment(projectId, employeeId) {
+  if (!employeeId) return;
+  const isAllocated = db.allocations.some((a) => a.project_id === projectId && a.employee_id === employeeId);
+  if (!isAllocated) {
+    const err = new Error('Assigned employee must be allocated to this project.');
+    err.status = 400;
+    throw err;
+  }
 }
 
 // --- Mock API --------------------------------------------------------------
@@ -187,7 +221,10 @@ export const mockBackend = {
       .filter((a) => a.employee_id === id)
       .map((a) => ({ ...a, project: deriveProject(db.projects.find((p) => p.id === a.project_id)) }));
     const usage = db.usage.filter((u) => u.employee_id === id);
-    return { ...deriveEmployee(e), allocations, usage };
+    const deliverables = db.deliverables
+      .filter((d) => d.assigned_employee_id === id)
+      .map(deriveDeliverable);
+    return { ...deriveEmployee(e), allocations, usage, deliverables };
   },
   async createEmployee(payload) {
     await delay();
@@ -207,6 +244,7 @@ export const mockBackend = {
     db.employees = db.employees.filter((x) => x.id !== id);
     db.allocations = db.allocations.filter((a) => a.employee_id !== id);
     db.usage = db.usage.filter((u) => u.employee_id !== id);
+    db.deliverables = db.deliverables.map((d) => (d.assigned_employee_id === id ? { ...d, assigned_employee_id: null } : d));
     return { ok: true };
   },
 
@@ -228,7 +266,10 @@ export const mockBackend = {
     const dependencies = db.dependencies
       .filter((d) => d.project_id === id)
       .map((d) => ({ ...d, depends_on: deriveProject(db.projects.find((p2) => p2.id === d.depends_on_project_id)) }));
-    return { ...deriveProject(p), allocations, usage, dependencies };
+    const deliverables = db.deliverables
+      .filter((d) => d.project_id === id)
+      .map(deriveDeliverable);
+    return { ...deriveProject(p), allocations, usage, dependencies, deliverables };
   },
   async createProject(payload) {
     await delay();
@@ -242,9 +283,23 @@ export const mockBackend = {
       err.status = 400;
       throw err;
     }
+    const initialDeliverables = Array.isArray(payload.deliverables) ? payload.deliverables : [];
     const p = { id: uid(), actual_completion_percent: 0, stage: 'Planning', ...payload };
+    delete p.deliverables;
+    initialDeliverables.forEach((d) => assertDeliverableAssignment(p.id, d.employee_id ?? d.assigned_employee_id));
     db.projects.push(p);
-    return deriveProject(p);
+    initialDeliverables.forEach((d) => {
+      db.deliverables.push({
+        id: uid(),
+        project_id: p.id,
+        title: d.title,
+        description: d.description || '',
+        due_date: d.due_date,
+        assigned_employee_id: d.employee_id ?? d.assigned_employee_id ?? null,
+        status: d.status || 'pending',
+      });
+    });
+    return this.getProject(p.id);
   },
   async updateProject(id, payload) {
     await delay();
@@ -269,6 +324,7 @@ export const mockBackend = {
     db.allocations = db.allocations.filter((a) => a.project_id !== id);
     db.usage = db.usage.filter((u) => u.project_id !== id);
     db.dependencies = db.dependencies.filter((d) => d.project_id !== id && d.depends_on_project_id !== id);
+    db.deliverables = db.deliverables.filter((d) => d.project_id !== id);
     return { ok: true };
   },
   async projectSummary(id) {
@@ -349,6 +405,60 @@ export const mockBackend = {
     return { ok: true };
   },
 
+  // Deliverables
+  async listDeliverables(filters = {}) {
+    await delay();
+    return db.deliverables
+      .filter((d) => !filters?.project_id || d.project_id === filters.project_id)
+      .filter((d) => !filters?.employee_id || d.assigned_employee_id === filters.employee_id)
+      .filter((d) => !filters?.status || d.status === filters.status)
+      .map(deriveDeliverable);
+  },
+  async getDeliverable(id) {
+    await delay();
+    const d = db.deliverables.find((x) => x.id === id);
+    if (!d) throw notFound('Deliverable');
+    return deriveDeliverable(d);
+  },
+  async createDeliverable(payload) {
+    await delay();
+    const assignedEmployeeId = payload.employee_id ?? payload.assigned_employee_id ?? null;
+    assertDeliverableAssignment(payload.project_id, assignedEmployeeId);
+    const d = {
+      id: uid(),
+      project_id: payload.project_id,
+      title: payload.title,
+      description: payload.description || '',
+      due_date: payload.due_date,
+      assigned_employee_id: assignedEmployeeId || null,
+      status: payload.status || 'pending',
+    };
+    db.deliverables.push(d);
+    return deriveDeliverable(d);
+  },
+  async updateDeliverable(id, payload) {
+    await delay();
+    const d = db.deliverables.find((x) => x.id === id);
+    if (!d) throw notFound('Deliverable');
+    const hasAssignee = Object.prototype.hasOwnProperty.call(payload, 'employee_id')
+      || Object.prototype.hasOwnProperty.call(payload, 'assigned_employee_id');
+    const assignedEmployeeId = hasAssignee
+      ? payload.employee_id ?? payload.assigned_employee_id ?? null
+      : d.assigned_employee_id;
+    assertDeliverableAssignment(d.project_id, assignedEmployeeId);
+    Object.assign(d, payload, {
+      assigned_employee_id: assignedEmployeeId || null,
+      status: payload.status || d.status,
+    });
+    delete d.employee_id;
+    return deriveDeliverable(d);
+  },
+  async deleteDeliverable(id) {
+    await delay();
+    db.deliverables = db.deliverables.filter((x) => x.id !== id);
+    return { ok: true };
+  },
+
   // Dashboard
   async dashboard() {
     await delay();
@@ -373,6 +483,9 @@ export const mockBackend = {
       total_allocated_hours: projects.reduce((s, p) => s + p.allocated_hours, 0),
       total_hours_used: projects.reduce((s, p) => s + p.hours_used, 0),
       overallocated_employees: employees.filter((e) => e.overallocated).length,
+      total_deliverables: db.deliverables.length,
+      completed_deliverables: db.deliverables.filter((d) => d.status === 'completed').length,
+      unassigned_deliverables: db.deliverables.filter((d) => !d.assigned_employee_id).length,
       at_risk_projects: projects.filter((p) => p.rag_status === 'Red'),
       projects,
     };

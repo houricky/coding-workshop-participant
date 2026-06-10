@@ -8,13 +8,15 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { PageHeader, LoadingState } from '../components/ui';
 import RagChip from '../components/RagChip';
 import { employees as employeesApi, apiErrorMessage } from '../services/api';
-import { money, hours, initials, percent, clampPercent } from '../utils/format';
+import { money, hours, initials, percent, clampPercent, formatDate } from '../utils/format';
 import { rag } from '../theme';
 
 const roleLabel = (role) => ({ admin: 'Admin', manager: 'Manager', employee: 'Employee' }[role] || role || 'Employee');
 const projectRoleLabel = (role) => ({ manager: 'Manager', employee: 'Employee' }[role] || 'Employee');
 const staffLabel = (type) => (type === 'non_direct' ? 'Non-direct' : 'Direct');
 const locationLabel = (location) => (location === 'on_site' ? 'On-site' : 'Remote');
+const deliverableStatusLabel = (status) => ({ pending: 'Pending', in_progress: 'In progress', completed: 'Completed' }[status] || status || 'Pending');
+const deliverableStatusColor = (status) => ({ completed: 'success', in_progress: 'warning', pending: 'default' }[status] || 'default');
 
 export default function EmployeeDetailPage() {
   const { id } = useParams();
@@ -94,6 +96,44 @@ export default function EmployeeDetailPage() {
                       <TableCell><Typography variant="body2" color="text.secondary">{projectRoleLabel(a.role_on_project)}</Typography></TableCell>
                       <TableCell>{a.project && <RagChip status={a.project.rag_status} />}</TableCell>
                       <TableCell align="right" className="tnum">{hours(a.allocated_hours)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Typography variant="overline" color="text.secondary">Deliverables</Typography>
+              <Table size="small" sx={{ mt: 1 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Deliverable</TableCell>
+                    <TableCell>Project</TableCell>
+                    <TableCell>Due date</TableCell>
+                    <TableCell>Status</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {(e.deliverables || []).length === 0 && (
+                    <TableRow><TableCell colSpan={4}><Typography variant="body2" color="text.secondary">No assigned deliverables.</Typography></TableCell></TableRow>
+                  )}
+                  {(e.deliverables || []).map((deliverable) => (
+                    <TableRow key={deliverable.id} hover>
+                      <TableCell>{deliverable.title}</TableCell>
+                      <TableCell>
+                        <Link component="button" underline="hover" onClick={() => navigate(`/projects/${deliverable.project_id}`)}>
+                          {deliverable.project?.name}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="tnum">{formatDate(deliverable.due_date)}</TableCell>
+                      <TableCell>
+                        <Chip size="small" color={deliverableStatusColor(deliverable.status)}
+                          label={deliverableStatusLabel(deliverable.status)} />
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

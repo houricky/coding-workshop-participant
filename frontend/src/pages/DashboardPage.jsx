@@ -5,6 +5,7 @@ import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalance
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
+import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip, Legend,
 } from 'recharts';
@@ -99,6 +100,11 @@ export default function DashboardPage() {
         <Grid item xs={12} sm={6} md={3}>
           <StatCard label="Overallocated people" value={data.overallocated_employees}
             sub="above planned capacity" accent={rag.red.main} icon={<WarningAmberOutlinedIcon />} />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <StatCard label="Deliverables" value={data.total_deliverables ?? 0}
+            sub={`${data.completed_deliverables ?? 0} complete · ${data.unassigned_deliverables ?? 0} need owner`}
+            icon={<AssignmentOutlinedIcon />} />
         </Grid>
 
         {/* RAG breakdown */}

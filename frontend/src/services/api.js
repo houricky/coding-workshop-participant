@@ -22,6 +22,7 @@ const endpoint = {
   allocations: '/api/allocation-service',
   usage: '/api/usage-service',
   dependencies: '/api/dependency-service',
+  deliverables: '/api/deliverable-service',
   dashboard: '/api/dashboard-service',
 };
 
@@ -94,6 +95,14 @@ export const dependencies = {
   list: () => (USE_MOCK ? mockBackend.listDependencies() : unwrap(http.get(endpoint.dependencies), 'dependencies')),
   create: (b) => (USE_MOCK ? mockBackend.createDependency(b) : unwrap(http.post(endpoint.dependencies, b), 'dependency')),
   remove: (id) => (USE_MOCK ? mockBackend.deleteDependency(id) : unwrap(http.delete(`${endpoint.dependencies}/${id}`))),
+};
+
+export const deliverables = {
+  list: (params) => (USE_MOCK ? mockBackend.listDeliverables(params) : unwrap(http.get(endpoint.deliverables, query(params)), 'deliverables')),
+  get: (id) => (USE_MOCK ? mockBackend.getDeliverable(id) : unwrap(http.get(`${endpoint.deliverables}/${id}`), 'deliverable')),
+  create: (b) => (USE_MOCK ? mockBackend.createDeliverable(b) : unwrap(http.post(endpoint.deliverables, b), 'deliverable')),
+  update: (id, b) => (USE_MOCK ? mockBackend.updateDeliverable(id, b) : unwrap(http.put(`${endpoint.deliverables}/${id}`, b), 'deliverable')),
+  remove: (id) => (USE_MOCK ? mockBackend.deleteDeliverable(id) : unwrap(http.delete(`${endpoint.deliverables}/${id}`))),
 };
 
 export const dashboard = {
