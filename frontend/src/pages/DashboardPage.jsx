@@ -16,6 +16,23 @@ import { money, hours, percent, clampPercent } from '../utils/format';
 import { rag } from '../theme';
 
 const RAG_COLORS = { Green: rag.green.main, Amber: rag.amber.main, Red: rag.red.main };
+const ACTIVE_STAGES = new Set(['active', 'in progress']);
+
+function isActiveProject(project) {
+  return ACTIVE_STAGES.has(String(project?.stage || '').toLowerCase());
+}
+
+function countActiveProjects(projects = []) {
+  return projects.filter(isActiveProject).length;
+}
+
+function activeRagBreakdownFromProjects(projects = []) {
+  return projects.filter(isActiveProject).reduce((acc, project) => {
+    const status = project.rag_status || 'Green';
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, { Green: 0, Amber: 0, Red: 0 });
+}
 
 function BurnBar({ label, used, allocated, formatter }) {
   const pct = allocated > 0 ? (used / allocated) * 100 : 0;
@@ -51,6 +68,13 @@ export default function DashboardPage() {
   if (!data) return <LoadingState label="Building your portfolio view" />;
 
   const pieData = Object.entries(data.rag_breakdown).map(([name, value]) => ({ name, value }));
+  const hasProjectRows = Array.isArray(data.projects);
+  const activeRagBreakdown = hasProjectRows
+    ? activeRagBreakdownFromProjects(data.projects)
+    : data.active_rag_breakdown || data.rag_breakdown;
+  const activeProjectCount = hasProjectRows
+    ? countActiveProjects(data.projects)
+    : data.active_project_count ?? data.project_count ?? 0;
 
   return (
     <Box>
@@ -58,8 +82,8 @@ export default function DashboardPage() {
 
       <Grid container spacing={2.5}>
         <Grid item xs={12} sm={6} md={3}>
-          <StatCard label="Active projects" value={data.project_count}
-            sub={`${data.rag_breakdown.Red} at risk · ${data.rag_breakdown.Amber} to watch`}
+          <StatCard label="Active projects" value={activeProjectCount}
+            sub={`${activeRagBreakdown.Red} at risk · ${activeRagBreakdown.Amber} to watch`}
             icon={<FolderOutlinedIcon />} />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>

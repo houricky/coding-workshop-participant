@@ -12,12 +12,13 @@ import { PageHeader, LoadingState, EmptyState, ConfirmDialog } from '../componen
 import RagChip from '../components/RagChip';
 import HealthGauge from '../components/HealthGauge';
 import ProjectFormDialog from '../components/ProjectFormDialog';
-import { projects as projectsApi, apiErrorMessage } from '../services/api';
+import { employees as employeesApi, projects as projectsApi, apiErrorMessage } from '../services/api';
 import { money, hours, percent } from '../utils/format';
 import { ragSortWeight } from '../utils/rag';
 
 export default function ProjectsListPage() {
   const [rows, setRows] = useState(null);
+  const [employees, setEmployees] = useState([]);
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [query, setQuery] = useState('');
@@ -30,7 +31,9 @@ export default function ProjectsListPage() {
 
   const load = () => {
     setError('');
-    projectsApi.list().then(setRows).catch((e) => setError(apiErrorMessage(e)));
+    Promise.all([projectsApi.list(), employeesApi.list()])
+      .then(([projectRows, employeeRows]) => { setRows(projectRows); setEmployees(employeeRows); })
+      .catch((e) => setError(apiErrorMessage(e)));
   };
   useEffect(load, []);
 
@@ -56,6 +59,7 @@ export default function ProjectsListPage() {
 
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!rows) return <LoadingState label="Loading projects" />;
+  const managerOptions = employees.filter((e) => e.role === 'manager');
 
   return (
     <Box>
@@ -107,7 +111,7 @@ export default function ProjectsListPage() {
                   <TableRow key={p.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/projects/${p.id}`)}>
                     <TableCell>
                       <Box sx={{ fontWeight: 600 }}>{p.name}</Box>
-                      <Box sx={{ fontSize: 12.5, color: 'text.secondary' }}>{p.stage} · {p.team_size} people</Box>
+                      <Box sx={{ fontSize: 12.5, color: 'text.secondary' }}>{p.stage} · {p.manager_count || 1} manager{(p.manager_count || 1) === 1 ? '' : 's'} · {p.team_size} people</Box>
                     </TableCell>
                     <TableCell><RagChip status={p.rag_status} /></TableCell>
                     <TableCell>
@@ -145,7 +149,7 @@ export default function ProjectsListPage() {
         </Card>
       )}
 
-      <ProjectFormDialog open={formOpen} initial={editing} onClose={() => setFormOpen(false)} onSubmit={handleSubmit} />
+      <ProjectFormDialog open={formOpen} initial={editing} managerOptions={managerOptions} onClose={() => setFormOpen(false)} onSubmit={handleSubmit} />
       <ConfirmDialog
         open={!!toDelete}
         title="Delete project?"

@@ -16,6 +16,7 @@ const fs = require('fs');
 const path = require('path');
 
 const PORT = 3001;
+const CORS_ALLOW_HEADERS = 'Content-Type, Authorization, X-Requested-With, Accept';
 const ROUTE_TO_ENDPOINT = {
   auth: 'auth-service',
   employees: 'employee-service',
@@ -49,7 +50,7 @@ const server = http.createServer((req, res) => {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', '*');
+  res.setHeader('Access-Control-Allow-Headers', CORS_ALLOW_HEADERS);
   res.setHeader('Access-Control-Max-Age', '86400');
 
   // Handle preflight

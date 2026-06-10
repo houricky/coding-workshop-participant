@@ -1,12 +1,152 @@
 -- ACME Budget & Resource Tracker — demo seed data (idempotent)
 
+-- Remove the expanded demo-only rows from the previous seed so start-dev can
+-- recover an existing local database without a manual reset.
+DELETE FROM project_dependencies
+WHERE id IN (
+    '77777777-7777-7777-7777-777777777702',
+    '77777777-7777-7777-7777-777777777703',
+    '77777777-7777-7777-7777-777777777704',
+    '77777777-7777-7777-7777-777777777705',
+    '77777777-7777-7777-7777-777777777706',
+    '77777777-7777-7777-7777-777777777707',
+    '77777777-7777-7777-7777-777777777708',
+    '77777777-7777-7777-7777-777777777709'
+);
+
+DELETE FROM app_users
+WHERE id IN (
+    '66666666-6666-6666-6666-666666666602',
+    '66666666-6666-6666-6666-666666666603',
+    '66666666-6666-6666-6666-666666666604'
+);
+
+DELETE FROM project_resource_usage
+WHERE id IN (
+    '55555555-5555-5555-5555-555555555504',
+    '55555555-5555-5555-5555-555555555505',
+    '55555555-5555-5555-5555-555555555506',
+    '55555555-5555-5555-5555-555555555507',
+    '55555555-5555-5555-5555-555555555508',
+    '55555555-5555-5555-5555-555555555509',
+    '55555555-5555-5555-5555-555555555510',
+    '55555555-5555-5555-5555-555555555511',
+    '55555555-5555-5555-5555-555555555512',
+    '55555555-5555-5555-5555-555555555513',
+    '55555555-5555-5555-5555-555555555514',
+    '55555555-5555-5555-5555-555555555515',
+    '55555555-5555-5555-5555-555555555516',
+    '55555555-5555-5555-5555-555555555517',
+    '55555555-5555-5555-5555-555555555518',
+    '55555555-5555-5555-5555-555555555519',
+    '55555555-5555-5555-5555-555555555520',
+    '55555555-5555-5555-5555-555555555521',
+    '55555555-5555-5555-5555-555555555522',
+    '55555555-5555-5555-5555-555555555523',
+    '55555555-5555-5555-5555-555555555524',
+    '55555555-5555-5555-5555-555555555525',
+    '55555555-5555-5555-5555-555555555526',
+    '55555555-5555-5555-5555-555555555527',
+    '55555555-5555-5555-5555-555555555528',
+    '55555555-5555-5555-5555-555555555529',
+    '55555555-5555-5555-5555-555555555530',
+    '55555555-5555-5555-5555-555555555531',
+    '55555555-5555-5555-5555-555555555532',
+    '55555555-5555-5555-5555-555555555533',
+    '55555555-5555-5555-5555-555555555534'
+);
+
+DELETE FROM project_resource_allocations
+WHERE id IN (
+    '44444444-4444-4444-4444-444444444405',
+    '44444444-4444-4444-4444-444444444406',
+    '44444444-4444-4444-4444-444444444407',
+    '44444444-4444-4444-4444-444444444408',
+    '44444444-4444-4444-4444-444444444409',
+    '44444444-4444-4444-4444-444444444410',
+    '44444444-4444-4444-4444-444444444411',
+    '44444444-4444-4444-4444-444444444412',
+    '44444444-4444-4444-4444-444444444413',
+    '44444444-4444-4444-4444-444444444414',
+    '44444444-4444-4444-4444-444444444415',
+    '44444444-4444-4444-4444-444444444416',
+    '44444444-4444-4444-4444-444444444417',
+    '44444444-4444-4444-4444-444444444418',
+    '44444444-4444-4444-4444-444444444419',
+    '44444444-4444-4444-4444-444444444420',
+    '44444444-4444-4444-4444-444444444421',
+    '44444444-4444-4444-4444-444444444422',
+    '44444444-4444-4444-4444-444444444423',
+    '44444444-4444-4444-4444-444444444424',
+    '44444444-4444-4444-4444-444444444425',
+    '44444444-4444-4444-4444-444444444426',
+    '44444444-4444-4444-4444-444444444427',
+    '44444444-4444-4444-4444-444444444428',
+    '44444444-4444-4444-4444-444444444429',
+    '44444444-4444-4444-4444-444444444430',
+    '44444444-4444-4444-4444-444444444431',
+    '44444444-4444-4444-4444-444444444432',
+    '44444444-4444-4444-4444-444444444433',
+    '44444444-4444-4444-4444-444444444434',
+    '44444444-4444-4444-4444-444444444435',
+    '44444444-4444-4444-4444-444444444436'
+);
+
+DELETE FROM project_budgets
+WHERE id IN (
+    '33333333-3333-3333-3333-333333333304',
+    '33333333-3333-3333-3333-333333333305',
+    '33333333-3333-3333-3333-333333333306',
+    '33333333-3333-3333-3333-333333333307',
+    '33333333-3333-3333-3333-333333333308',
+    '33333333-3333-3333-3333-333333333309',
+    '33333333-3333-3333-3333-333333333310'
+);
+
+DELETE FROM projects
+WHERE id IN (
+    '22222222-2222-2222-2222-222222222204',
+    '22222222-2222-2222-2222-222222222205',
+    '22222222-2222-2222-2222-222222222206',
+    '22222222-2222-2222-2222-222222222207',
+    '22222222-2222-2222-2222-222222222208',
+    '22222222-2222-2222-2222-222222222209',
+    '22222222-2222-2222-2222-222222222210'
+);
+
+DELETE FROM employees
+WHERE id IN (
+    '11111111-1111-1111-1111-111111111104',
+    '11111111-1111-1111-1111-111111111105',
+    '11111111-1111-1111-1111-111111111106',
+    '11111111-1111-1111-1111-111111111107',
+    '11111111-1111-1111-1111-111111111108',
+    '11111111-1111-1111-1111-111111111109',
+    '11111111-1111-1111-1111-111111111110',
+    '11111111-1111-1111-1111-111111111111',
+    '11111111-1111-1111-1111-111111111112',
+    '11111111-1111-1111-1111-111111111113',
+    '11111111-1111-1111-1111-111111111114'
+);
+
 -- Demo employees
-INSERT INTO employees (id, first_name, last_name, email, job_title, department, hourly_rate, weekly_capacity_hours)
+INSERT INTO employees (id, first_name, last_name, email, role, job_title, department, is_direct_staff, work_location, hourly_rate, weekly_capacity_hours)
 VALUES
-    ('11111111-1111-1111-1111-111111111101', 'Alice', 'Johnson', 'alice@acme.com', 'Senior Developer', 'Engineering', 85.00, 40),
-    ('11111111-1111-1111-1111-111111111102', 'Bob', 'Smith', 'bob@acme.com', 'Project Manager', 'PMO', 95.00, 40),
-    ('11111111-1111-1111-1111-111111111103', 'Carol', 'Davis', 'carol@acme.com', 'UX Designer', 'Design', 75.00, 40)
-ON CONFLICT (id) DO NOTHING;
+    ('11111111-1111-1111-1111-111111111101', 'Alice', 'Johnson', 'alice@acme.com', 'employee', 'Senior Developer', 'Engineering', TRUE, 'remote', 85.00, 40),
+    ('11111111-1111-1111-1111-111111111102', 'Bob', 'Smith', 'bob@acme.com', 'manager', 'Project Manager', 'PMO', TRUE, 'on_site', 95.00, 40),
+    ('11111111-1111-1111-1111-111111111103', 'Carol', 'Davis', 'carol@acme.com', 'employee', 'UX Designer', 'Design', FALSE, 'remote', 75.00, 40)
+ON CONFLICT (id) DO UPDATE SET
+    first_name = EXCLUDED.first_name,
+    last_name = EXCLUDED.last_name,
+    email = EXCLUDED.email,
+    role = EXCLUDED.role,
+    job_title = EXCLUDED.job_title,
+    department = EXCLUDED.department,
+    is_direct_staff = EXCLUDED.is_direct_staff,
+    work_location = EXCLUDED.work_location,
+    hourly_rate = EXCLUDED.hourly_rate,
+    weekly_capacity_hours = EXCLUDED.weekly_capacity_hours,
+    is_active = TRUE;
 
 -- Demo projects
 INSERT INTO projects (id, name, description, stage, actual_completion_percent, project_manager_id, start_date, end_date)
@@ -17,7 +157,14 @@ VALUES
      '11111111-1111-1111-1111-111111111102', '2025-03-01', '2025-09-30'),
     ('22222222-2222-2222-2222-222222222203', 'Data Warehouse', 'Centralized analytics platform', 'planning', 10.00,
      '11111111-1111-1111-1111-111111111102', '2025-06-01', '2026-06-30')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    stage = EXCLUDED.stage,
+    actual_completion_percent = EXCLUDED.actual_completion_percent,
+    project_manager_id = EXCLUDED.project_manager_id,
+    start_date = EXCLUDED.start_date,
+    end_date = EXCLUDED.end_date;
 
 -- Demo budgets
 INSERT INTO project_budgets (id, project_id, allocated_budget, budget_used, currency)
@@ -25,20 +172,38 @@ VALUES
     ('33333333-3333-3333-3333-333333333301', '22222222-2222-2222-2222-222222222201', 500000.00, 0, 'USD'),
     ('33333333-3333-3333-3333-333333333302', '22222222-2222-2222-2222-222222222202', 250000.00, 0, 'USD'),
     ('33333333-3333-3333-3333-333333333303', '22222222-2222-2222-2222-222222222203', 750000.00, 0, 'USD')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+    project_id = EXCLUDED.project_id,
+    allocated_budget = EXCLUDED.allocated_budget,
+    budget_used = EXCLUDED.budget_used,
+    currency = EXCLUDED.currency,
+    notes = NULL;
 
 -- Demo allocations
 INSERT INTO project_resource_allocations (id, project_id, employee_id, allocated_hours, hourly_rate_snapshot, role_on_project)
 VALUES
+    ('44444444-4444-4444-4444-444444444405', '22222222-2222-2222-2222-222222222201',
+     '11111111-1111-1111-1111-111111111102', 120.00, 95.00, 'manager'),
     ('44444444-4444-4444-4444-444444444401', '22222222-2222-2222-2222-222222222201',
-     '11111111-1111-1111-1111-111111111101', 800.00, 85.00, 'Lead Developer'),
+     '11111111-1111-1111-1111-111111111101', 800.00, 85.00, 'employee'),
     ('44444444-4444-4444-4444-444444444402', '22222222-2222-2222-2222-222222222201',
-     '11111111-1111-1111-1111-111111111103', 400.00, 75.00, 'Designer'),
+     '11111111-1111-1111-1111-111111111103', 400.00, 75.00, 'employee'),
+    ('44444444-4444-4444-4444-444444444406', '22222222-2222-2222-2222-222222222202',
+     '11111111-1111-1111-1111-111111111102', 100.00, 95.00, 'manager'),
     ('44444444-4444-4444-4444-444444444403', '22222222-2222-2222-2222-222222222202',
-     '11111111-1111-1111-1111-111111111101', 600.00, 85.00, 'Developer'),
+     '11111111-1111-1111-1111-111111111101', 600.00, 85.00, 'employee'),
     ('44444444-4444-4444-4444-444444444404', '22222222-2222-2222-2222-222222222202',
-     '11111111-1111-1111-1111-111111111103', 300.00, 75.00, 'Designer')
-ON CONFLICT (id) DO NOTHING;
+     '11111111-1111-1111-1111-111111111103', 300.00, 75.00, 'employee'),
+    ('44444444-4444-4444-4444-444444444407', '22222222-2222-2222-2222-222222222203',
+     '11111111-1111-1111-1111-111111111102', 80.00, 95.00, 'manager')
+ON CONFLICT (id) DO UPDATE SET
+    project_id = EXCLUDED.project_id,
+    employee_id = EXCLUDED.employee_id,
+    allocated_hours = EXCLUDED.allocated_hours,
+    hourly_rate_snapshot = EXCLUDED.hourly_rate_snapshot,
+    role_on_project = EXCLUDED.role_on_project,
+    start_date = NULL,
+    end_date = NULL;
 
 -- Demo usage (triggers will update budget_used and RAG)
 INSERT INTO project_resource_usage (id, project_id, employee_id, usage_date, hours_used, cost_amount, description)
@@ -49,7 +214,13 @@ VALUES
      '11111111-1111-1111-1111-111111111103', '2025-05-01', 60.00, 4500.00, 'UI mockups'),
     ('55555555-5555-5555-5555-555555555503', '22222222-2222-2222-2222-222222222202',
      '11111111-1111-1111-1111-111111111101', '2025-05-15', 80.00, 6800.00, 'API integration')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+    project_id = EXCLUDED.project_id,
+    employee_id = EXCLUDED.employee_id,
+    usage_date = EXCLUDED.usage_date,
+    hours_used = EXCLUDED.hours_used,
+    cost_amount = EXCLUDED.cost_amount,
+    description = EXCLUDED.description;
 
 -- Demo admin user (password: admin123)
 INSERT INTO app_users (id, email, password_hash, role, employee_id)
@@ -60,7 +231,11 @@ VALUES (
     'admin',
     '11111111-1111-1111-1111-111111111102'
 )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    password_hash = EXCLUDED.password_hash,
+    role = EXCLUDED.role,
+    employee_id = EXCLUDED.employee_id;
 
 -- Demo dependency
 INSERT INTO project_dependencies (id, project_id, depends_on_project_id, dependency_type)
@@ -70,7 +245,11 @@ VALUES (
     '22222222-2222-2222-2222-222222222201',
     'finish_to_start'
 )
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+    project_id = EXCLUDED.project_id,
+    depends_on_project_id = EXCLUDED.depends_on_project_id,
+    dependency_type = EXCLUDED.dependency_type;
 
 -- Recalculate RAG for all demo projects
+SELECT fn_refresh_budget_used(project_id) FROM project_budgets;
 SELECT fn_update_project_rag(id) FROM projects;

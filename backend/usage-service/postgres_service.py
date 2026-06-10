@@ -10,6 +10,38 @@ USAGE_COLS = (
 )
 
 
+def _employee(row: dict) -> dict:
+    return {
+        "id": row.get("employee_id"),
+        "first_name": row.get("first_name"),
+        "last_name": row.get("last_name"),
+        "name": f"{row.get('first_name', '')} {row.get('last_name', '')}".strip(),
+        "email": row.get("email"),
+        "title": row.get("job_title"),
+        "job_title": row.get("job_title"),
+        "hourly_rate": row.get("employee_hourly_rate"),
+        "capacity_hours": row.get("weekly_capacity_hours"),
+        "weekly_capacity_hours": row.get("weekly_capacity_hours"),
+    }
+
+
+def _project(row: dict) -> dict:
+    return {
+        "id": row.get("project_id"),
+        "name": row.get("project_name"),
+        "stage": row.get("project_stage"),
+    }
+
+
+def _usage(row: dict) -> dict:
+    return {
+        **row,
+        "logged_on": row.get("usage_date"),
+        "employee": _employee(row),
+        "project": _project(row),
+    }
+
+
 def get_employee_rate(employee_id: str) -> float | None:
     conn = get_connection()
     with conn.cursor() as cur:
@@ -37,28 +69,52 @@ def list_usage(
     conditions = []
     params = []
     if project_id:
-        conditions.append("project_id = %s")
+        conditions.append("pru.project_id = %s")
         params.append(project_id)
     if employee_id:
-        conditions.append("employee_id = %s")
+        conditions.append("pru.employee_id = %s")
         params.append(employee_id)
     if from_date:
-        conditions.append("usage_date >= %s")
+        conditions.append("pru.usage_date >= %s")
         params.append(from_date)
     if to_date:
-        conditions.append("usage_date <= %s")
+        conditions.append("pru.usage_date <= %s")
         params.append(to_date)
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     with conn.cursor() as cur:
-        cur.execute(f"SELECT {USAGE_COLS} FROM project_resource_usage {where} ORDER BY usage_date DESC", params)
-        return cur.fetchall()
+        cur.execute(
+            f"""
+            SELECT pru.*, p.name AS project_name, p.stage AS project_stage,
+                   e.first_name, e.last_name, e.email, e.job_title,
+                   e.hourly_rate AS employee_hourly_rate, e.weekly_capacity_hours
+            FROM project_resource_usage pru
+            LEFT JOIN projects p ON p.id = pru.project_id
+            LEFT JOIN employees e ON e.id = pru.employee_id
+            {where}
+            ORDER BY pru.usage_date DESC
+            """,
+            params,
+        )
+        return [_usage(row) for row in cur.fetchall()]
 
 
 def get_usage(usage_id: str) -> dict | None:
     conn = get_connection()
     with conn.cursor() as cur:
-        cur.execute(f"SELECT {USAGE_COLS} FROM project_resource_usage WHERE id = %s", (usage_id,))
-        return cur.fetchone()
+        cur.execute(
+            """
+            SELECT pru.*, p.name AS project_name, p.stage AS project_stage,
+                   e.first_name, e.last_name, e.email, e.job_title,
+                   e.hourly_rate AS employee_hourly_rate, e.weekly_capacity_hours
+            FROM project_resource_usage pru
+            LEFT JOIN projects p ON p.id = pru.project_id
+            LEFT JOIN employees e ON e.id = pru.employee_id
+            WHERE pru.id = %s
+            """,
+            (usage_id,),
+        )
+        row = cur.fetchone()
+        return _usage(row) if row else None
 
 
 def create_usage(data: dict) -> dict:
@@ -76,7 +132,7 @@ def create_usage(data: dict) -> dict:
                 (
                     data["project_id"],
                     data["employee_id"],
-                    data["usage_date"],
+                    data.get("usage_date", data.get("logged_on")),
                     data["hours_used"],
                     cost,
                     data.get("description"),
@@ -84,7 +140,7 @@ def create_usage(data: dict) -> dict:
             )
             row = cur.fetchone()
             conn.commit()
-            return row
+            return get_usage(row["id"])
     except errors.ForeignKeyViolation:
         conn.rollback()
         raise ValueError("Invalid project_id or employee_id")
@@ -100,6 +156,8 @@ def update_usage(usage_id: str, data: dict) -> dict | None:
         return None
 
     allowed = {"usage_date", "hours_used", "cost_amount", "description"}
+    if "logged_on" in data and "usage_date" not in data:
+        data["usage_date"] = data["logged_on"]
     updates = {k: v for k, v in data.items() if k in allowed}
     if not updates:
         return existing
@@ -120,7 +178,7 @@ def update_usage(usage_id: str, data: dict) -> dict | None:
             )
             row = cur.fetchone()
             conn.commit()
-            return row
+            return get_usage(usage_id)
     except Exception:
         conn.rollback()
         reset_connection()

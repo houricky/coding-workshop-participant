@@ -72,9 +72,11 @@ def list_all(query: dict):
 
 
 def create(body: dict):
-    missing = require_fields(body, ["name"])
+    missing = require_fields(body, ["name", "project_manager_id"])
     if missing:
         return error_response(400, "validation_error", "Missing required fields", {"fields": missing})
+    if not is_valid_uuid(body["project_manager_id"]):
+        return error_response(400, "validation_error", "Invalid project_manager_id")
     if body.get("stage") and body["stage"] not in VALID_STAGES:
         return error_response(400, "validation_error", "Invalid project stage")
     pct, err = parse_percent(body.get("actual_completion_percent", 0), "actual_completion_percent")
@@ -103,6 +105,8 @@ def get_summary(project_id: str):
 
 
 def update(project_id: str, body: dict):
+    if body.get("project_manager_id") and not is_valid_uuid(body["project_manager_id"]):
+        return error_response(400, "validation_error", "Invalid project_manager_id")
     if body.get("stage") and body["stage"] not in VALID_STAGES:
         return error_response(400, "validation_error", "Invalid project stage")
     if "actual_completion_percent" in body:

@@ -11,9 +11,11 @@ import { PageHeader, LoadingState } from '../components/ui';
 import RagChip from '../components/RagChip';
 import HealthGauge from '../components/HealthGauge';
 import ProjectFormDialog from '../components/ProjectFormDialog';
-import { projects as projectsApi, apiErrorMessage } from '../services/api';
+import { employees as employeesApi, projects as projectsApi, apiErrorMessage } from '../services/api';
 import { money, hours, percent, formatDate, initials, clampPercent } from '../utils/format';
 import { ragMeta } from '../theme';
+
+const projectRoleLabel = (role) => ({ manager: 'Manager', employee: 'Employee' }[role] || 'Employee');
 
 function MetricRow({ label, used, allocated, formatter, accentOver = 90 }) {
   const pct = allocated > 0 ? (used / allocated) * 100 : 0;
@@ -36,17 +38,21 @@ export default function ProjectDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [p, setP] = useState(null);
+  const [employees, setEmployees] = useState([]);
   const [error, setError] = useState('');
   const [editOpen, setEditOpen] = useState(false);
 
   const load = useCallback(() => {
     setError('');
-    projectsApi.get(id).then(setP).catch((e) => setError(apiErrorMessage(e)));
+    Promise.all([projectsApi.get(id), employeesApi.list()])
+      .then(([project, employeeRows]) => { setP(project); setEmployees(employeeRows); })
+      .catch((e) => setError(apiErrorMessage(e)));
   }, [id]);
   useEffect(load, [load]);
 
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!p) return <LoadingState label="Loading project" />;
+  const managerOptions = employees.filter((e) => e.role === 'manager');
 
   return (
     <Box>
@@ -81,6 +87,7 @@ export default function ProjectDetailPage() {
               </Box>
               <Stack direction="row" spacing={1} sx={{ mt: 2 }} flexWrap="wrap" useFlexGap>
                 <Chip size="small" label={p.stage} />
+                <Chip size="small" variant="outlined" label={`Lead: ${p.project_manager?.name || managerOptions.find((m) => m.id === p.project_manager_id)?.name || 'Unassigned'}`} />
                 <Chip size="small" variant="outlined" label={`${formatDate(p.start_date)} → ${formatDate(p.end_date)}`} />
                 <Chip size="small" variant="outlined" label={`${p.team_size} people`} />
               </Stack>
@@ -139,7 +146,7 @@ export default function ProjectDetailPage() {
                           </Link>
                         </Stack>
                       </TableCell>
-                      <TableCell><Typography variant="body2" color="text.secondary">{a.role_on_project}</Typography></TableCell>
+                      <TableCell><Typography variant="body2" color="text.secondary">{projectRoleLabel(a.role_on_project)}</Typography></TableCell>
                       <TableCell align="right" className="tnum">{hours(a.allocated_hours)}</TableCell>
                     </TableRow>
                   ))}
@@ -191,7 +198,7 @@ export default function ProjectDetailPage() {
         </Grid>
       </Grid>
 
-      <ProjectFormDialog open={editOpen} initial={p} onClose={() => setEditOpen(false)}
+      <ProjectFormDialog open={editOpen} initial={p} managerOptions={managerOptions} onClose={() => setEditOpen(false)}
         onSubmit={async (payload) => { await projectsApi.update(p.id, payload); load(); }} />
     </Box>
   );

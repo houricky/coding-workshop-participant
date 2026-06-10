@@ -9,6 +9,8 @@ import { PageHeader, LoadingState, EmptyState, ConfirmDialog } from '../componen
 import { allocations as allocApi, projects as projectsApi, employees as employeesApi, apiErrorMessage } from '../services/api';
 import { hours, money } from '../utils/format';
 
+const projectRoleLabel = (role) => ({ manager: 'Manager', employee: 'Employee' }[role] || 'Employee');
+
 export default function ResourceAllocationPage() {
   const [rows, setRows] = useState(null);
   const [projects, setProjects] = useState([]);
@@ -27,7 +29,7 @@ export default function ResourceAllocationPage() {
   useEffect(load, []);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const valid = form.project_id && form.employee_id && Number(form.allocated_hours) > 0;
+  const valid = form.project_id && form.employee_id && form.role_on_project && Number(form.allocated_hours) > 0;
 
   const handleAdd = async () => {
     if (!valid) return;
@@ -72,7 +74,10 @@ export default function ResourceAllocationPage() {
                 InputProps={{ endAdornment: <InputAdornment position="end">h</InputAdornment> }} />
             </Grid>
             <Grid item xs={6} sm={4} md={2}>
-              <TextField size="small" label="Role" value={form.role_on_project} onChange={set('role_on_project')} fullWidth />
+              <TextField select size="small" label="Role" value={form.role_on_project} onChange={set('role_on_project')} fullWidth>
+                <MenuItem value="employee">Employee</MenuItem>
+                <MenuItem value="manager">Manager</MenuItem>
+              </TextField>
             </Grid>
             <Grid item xs={12} sm={4} md={2}>
               <Button variant="contained" startIcon={<AddIcon />} onClick={handleAdd} disabled={!valid || saving} fullWidth sx={{ height: 40 }}>
@@ -104,7 +109,7 @@ export default function ResourceAllocationPage() {
                   <TableRow key={a.id} hover>
                     <TableCell>{a.employee?.name}</TableCell>
                     <TableCell>{a.project?.name}</TableCell>
-                    <TableCell><Typography variant="body2" color="text.secondary">{a.role_on_project || '—'}</Typography></TableCell>
+                    <TableCell><Typography variant="body2" color="text.secondary">{projectRoleLabel(a.role_on_project)}</Typography></TableCell>
                     <TableCell align="right" className="tnum">{hours(a.allocated_hours)}</TableCell>
                     <TableCell align="right" className="tnum">{money(a.allocated_hours * rateOf(a.employee_id))}</TableCell>
                     <TableCell align="right">

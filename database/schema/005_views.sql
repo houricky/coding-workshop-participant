@@ -1,5 +1,9 @@
 -- ACME Budget & Resource Tracker — reporting views
 
+DROP VIEW IF EXISTS v_portfolio_dashboard;
+DROP VIEW IF EXISTS v_employee_allocation_summary;
+DROP VIEW IF EXISTS v_project_summary;
+
 CREATE OR REPLACE VIEW v_project_summary AS
 SELECT
     p.id AS project_id,
@@ -23,6 +27,10 @@ SELECT
         ELSE 0
     END AS hours_used_percent,
     (SELECT COUNT(*) FROM project_resource_allocations pra WHERE pra.project_id = p.id) AS allocation_count,
+    (
+        CASE WHEN p.project_manager_id IS NULL THEN 0 ELSE 1 END
+        + (SELECT COUNT(*) FROM project_resource_allocations pra WHERE pra.project_id = p.id AND pra.role_on_project = 'manager')
+    ) AS manager_count,
     (SELECT COUNT(*) FROM project_dependencies pd WHERE pd.project_id = p.id) AS dependency_count,
     p.start_date,
     p.end_date,
@@ -36,7 +44,10 @@ SELECT
     e.first_name,
     e.last_name,
     e.email,
+    e.role,
     e.department,
+    e.is_direct_staff,
+    e.work_location,
     e.weekly_capacity_hours,
     COALESCE(SUM(pra.allocated_hours), 0) AS total_allocated_hours,
     CASE
@@ -49,7 +60,7 @@ SELECT
 FROM employees e
 LEFT JOIN project_resource_allocations pra ON pra.employee_id = e.id
 WHERE e.is_active = TRUE
-GROUP BY e.id, e.first_name, e.last_name, e.email, e.department, e.weekly_capacity_hours;
+GROUP BY e.id, e.first_name, e.last_name, e.email, e.role, e.department, e.is_direct_staff, e.work_location, e.weekly_capacity_hours;
 
 CREATE OR REPLACE VIEW v_portfolio_dashboard AS
 SELECT

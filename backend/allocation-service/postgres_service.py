@@ -10,6 +10,40 @@ ALLOC_COLS = (
 )
 
 
+def _employee(row: dict) -> dict:
+    return {
+        "id": row.get("employee_id"),
+        "first_name": row.get("first_name"),
+        "last_name": row.get("last_name"),
+        "name": f"{row.get('first_name', '')} {row.get('last_name', '')}".strip(),
+        "email": row.get("email"),
+        "role": row.get("employee_role", "employee"),
+        "title": row.get("job_title"),
+        "job_title": row.get("job_title"),
+        "staff_type": "direct" if row.get("is_direct_staff", True) else "non_direct",
+        "location": row.get("work_location", "remote"),
+        "hourly_rate": row.get("employee_hourly_rate"),
+        "capacity_hours": row.get("weekly_capacity_hours"),
+        "weekly_capacity_hours": row.get("weekly_capacity_hours"),
+    }
+
+
+def _project(row: dict) -> dict:
+    return {
+        "id": row.get("project_id"),
+        "name": row.get("project_name"),
+        "stage": row.get("project_stage"),
+    }
+
+
+def _allocation(row: dict) -> dict:
+    return {
+        **row,
+        "employee": _employee(row),
+        "project": _project(row),
+    }
+
+
 def get_employee_rate(employee_id: str) -> float | None:
     conn = get_connection()
     with conn.cursor() as cur:
@@ -23,22 +57,48 @@ def list_allocations(project_id: str | None = None, employee_id: str | None = No
     conditions = []
     params = []
     if project_id:
-        conditions.append("project_id = %s")
+        conditions.append("pra.project_id = %s")
         params.append(project_id)
     if employee_id:
-        conditions.append("employee_id = %s")
+        conditions.append("pra.employee_id = %s")
         params.append(employee_id)
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     with conn.cursor() as cur:
-        cur.execute(f"SELECT {ALLOC_COLS} FROM project_resource_allocations {where} ORDER BY created_at", params)
-        return cur.fetchall()
+        cur.execute(
+            f"""
+            SELECT pra.*, p.name AS project_name, p.stage AS project_stage,
+                   e.first_name, e.last_name, e.email, e.role AS employee_role, e.job_title,
+                   e.is_direct_staff, e.work_location,
+                   e.hourly_rate AS employee_hourly_rate, e.weekly_capacity_hours
+            FROM project_resource_allocations pra
+            LEFT JOIN projects p ON p.id = pra.project_id
+            LEFT JOIN employees e ON e.id = pra.employee_id
+            {where}
+            ORDER BY pra.created_at
+            """,
+            params,
+        )
+        return [_allocation(row) for row in cur.fetchall()]
 
 
 def get_allocation(allocation_id: str) -> dict | None:
     conn = get_connection()
     with conn.cursor() as cur:
-        cur.execute(f"SELECT {ALLOC_COLS} FROM project_resource_allocations WHERE id = %s", (allocation_id,))
-        return cur.fetchone()
+        cur.execute(
+            """
+            SELECT pra.*, p.name AS project_name, p.stage AS project_stage,
+                   e.first_name, e.last_name, e.email, e.role AS employee_role, e.job_title,
+                   e.is_direct_staff, e.work_location,
+                   e.hourly_rate AS employee_hourly_rate, e.weekly_capacity_hours
+            FROM project_resource_allocations pra
+            LEFT JOIN projects p ON p.id = pra.project_id
+            LEFT JOIN employees e ON e.id = pra.employee_id
+            WHERE pra.id = %s
+            """,
+            (allocation_id,),
+        )
+        row = cur.fetchone()
+        return _allocation(row) if row else None
 
 
 def create_allocation(data: dict) -> dict:
@@ -71,7 +131,7 @@ def create_allocation(data: dict) -> dict:
             )
             row = cur.fetchone()
             conn.commit()
-            return row
+            return get_allocation(row["id"])
     except errors.UniqueViolation:
         conn.rollback()
         raise ValueError("Employee already allocated to this project")
@@ -101,7 +161,7 @@ def update_allocation(allocation_id: str, data: dict) -> dict | None:
             )
             row = cur.fetchone()
             conn.commit()
-            return row
+            return get_allocation(allocation_id)
     except Exception:
         conn.rollback()
         reset_connection()

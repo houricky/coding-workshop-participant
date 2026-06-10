@@ -2,12 +2,9 @@
 
 import os
 import hmac
-import logging
 from datetime import datetime, timedelta, timezone
 
 import jwt
-
-logger = logging.getLogger(__name__)
 
 
 def _bcrypt_module():
@@ -15,7 +12,6 @@ def _bcrypt_module():
         import bcrypt
         return bcrypt
     except Exception:
-        logger.exception("Unable to load bcrypt password backend")
         return None
 
 

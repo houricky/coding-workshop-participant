@@ -64,6 +64,8 @@ def list_all(query: dict):
 
 
 def create(body: dict):
+    if "logged_on" in body and "usage_date" not in body:
+        body["usage_date"] = body["logged_on"]
     missing = require_fields(body, ["project_id", "employee_id", "usage_date", "hours_used"])
     if missing:
         return error_response(400, "validation_error", "Missing required fields", {"fields": missing})

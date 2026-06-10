@@ -80,6 +80,9 @@ def create(body: dict):
     if err:
         return error_response(400, "validation_error", err)
     body["allocated_hours"] = hours
+    validation_error = validate_role(body)
+    if validation_error:
+        return validation_error
     allocation = create_allocation(body)
     return json_response(201, {"allocation": allocation})
 
@@ -97,6 +100,9 @@ def update(allocation_id: str, body: dict):
         if err:
             return error_response(400, "validation_error", err)
         body["allocated_hours"] = hours
+    validation_error = validate_role(body)
+    if validation_error:
+        return validation_error
     allocation = update_allocation(allocation_id, body)
     if not allocation:
         return error_response(404, "not_found", "Allocation not found")
@@ -107,3 +113,9 @@ def remove(allocation_id: str):
     if not delete_allocation(allocation_id):
         return error_response(404, "not_found", "Allocation not found")
     return no_content()
+
+
+def validate_role(body: dict):
+    if body.get("role_on_project") and body["role_on_project"] not in ("manager", "employee"):
+        return error_response(400, "validation_error", "Project role must be manager or employee")
+    return None

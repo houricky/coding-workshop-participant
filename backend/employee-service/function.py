@@ -56,8 +56,15 @@ def handler(event=None, context=None):
 def list_all(query: dict):
     department = query.get("department")
     is_active = parse_bool(query.get("is_active"))
+    is_direct_staff = parse_bool(query.get("is_direct_staff"))
     search = query.get("search")
-    employees = list_employees(department, is_active, search)
+    role = query.get("role")
+    work_location = query.get("work_location")
+    if role and role not in ("admin", "manager", "employee"):
+        return error_response(400, "validation_error", "Invalid role")
+    if work_location and work_location not in ("remote", "on_site"):
+        return error_response(400, "validation_error", "Invalid work_location")
+    employees = list_employees(department, is_active, search, role, is_direct_staff, work_location)
     return json_response(200, {"employees": employees, "count": len(employees)})
 
 
@@ -67,6 +74,9 @@ def create(body: dict):
         return error_response(400, "validation_error", "Missing required fields", {"fields": missing})
     if body.get("email") and not is_valid_email(body["email"]):
         return error_response(400, "validation_error", "Invalid email format")
+    validation_error = validate_employee_attributes(body)
+    if validation_error:
+        return validation_error
     employee = create_employee(body)
     return json_response(201, {"employee": employee})
 
@@ -81,6 +91,9 @@ def get_one(employee_id: str):
 def update(employee_id: str, body: dict):
     if body.get("email") and not is_valid_email(body["email"]):
         return error_response(400, "validation_error", "Invalid email format")
+    validation_error = validate_employee_attributes(body)
+    if validation_error:
+        return validation_error
     employee = update_employee(employee_id, body)
     if not employee:
         return error_response(404, "not_found", "Employee not found")
@@ -91,3 +104,11 @@ def remove(employee_id: str):
     if not delete_employee(employee_id):
         return error_response(404, "not_found", "Employee not found")
     return no_content()
+
+
+def validate_employee_attributes(body: dict):
+    if body.get("role") and body["role"] not in ("manager", "employee"):
+        return error_response(400, "validation_error", "Employee role must be manager or employee")
+    if body.get("work_location") and body["work_location"] not in ("remote", "on_site"):
+        return error_response(400, "validation_error", "Invalid work_location")
+    return None

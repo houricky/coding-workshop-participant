@@ -9,9 +9,9 @@ import { computeRag } from '../utils/rag';
 import { percent } from '../utils/format';
 
 const STAGES = ['Planning', 'In progress', 'On hold', 'Completed'];
-const empty = { name: '', description: '', stage: 'Planning', start_date: '', end_date: '', allocated_budget: 0, actual_completion_percent: 0 };
+const empty = { name: '', description: '', stage: 'Planning', project_manager_id: '', start_date: '', end_date: '', allocated_budget: 0, actual_completion_percent: 0 };
 
-export default function ProjectFormDialog({ open, initial, onClose, onSubmit }) {
+export default function ProjectFormDialog({ open, initial, managerOptions = [], onClose, onSubmit }) {
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
   const isEdit = !!initial?.id;
@@ -54,6 +54,11 @@ export default function ProjectFormDialog({ open, initial, onClose, onSubmit }) 
           <TextField label="Project name" value={form.name} onChange={set('name')} fullWidth autoFocus />
           <TextField label="Description" value={form.description} onChange={set('description')} fullWidth multiline minRows={2} />
           <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <TextField label="Team lead" select value={form.project_manager_id || ''} onChange={set('project_manager_id')} fullWidth>
+                {managerOptions.map((m) => <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>)}
+              </TextField>
+            </Grid>
             <Grid item xs={12} sm={6}>
               <TextField label="Stage" select value={form.stage} onChange={set('stage')} fullWidth>
                 {STAGES.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
@@ -93,7 +98,7 @@ export default function ProjectFormDialog({ open, initial, onClose, onSubmit }) 
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={handleSubmit} disabled={saving || !form.name}>
+        <Button variant="contained" onClick={handleSubmit} disabled={saving || !form.name || !form.project_manager_id}>
           {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create project'}
         </Button>
       </DialogActions>

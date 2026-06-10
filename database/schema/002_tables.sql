@@ -5,14 +5,28 @@ CREATE TABLE IF NOT EXISTS employees (
     first_name              VARCHAR(100) NOT NULL,
     last_name               VARCHAR(100) NOT NULL,
     email                   VARCHAR(255) UNIQUE,
+    role                    user_role NOT NULL DEFAULT 'employee',
     job_title               VARCHAR(100),
     department              VARCHAR(100),
+    is_direct_staff         BOOLEAN NOT NULL DEFAULT TRUE,
+    work_location           VARCHAR(20) NOT NULL DEFAULT 'remote',
     hourly_rate             NUMERIC(10, 2) NOT NULL DEFAULT 0,
     weekly_capacity_hours   NUMERIC(5, 2) NOT NULL DEFAULT 40,
     is_active               BOOLEAN NOT NULL DEFAULT TRUE,
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS role user_role NOT NULL DEFAULT 'employee';
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS is_direct_staff BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS work_location VARCHAR(20) NOT NULL DEFAULT 'remote';
+
+DO $$ BEGIN
+    ALTER TABLE employees ADD CONSTRAINT chk_employees_work_location
+        CHECK (work_location IN ('remote', 'on_site'));
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS projects (
     id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -34,11 +48,13 @@ CREATE TABLE IF NOT EXISTS app_users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email           VARCHAR(255) NOT NULL UNIQUE,
     password_hash   VARCHAR(255) NOT NULL,
-    role            user_role NOT NULL DEFAULT 'admin',
+    role            user_role NOT NULL DEFAULT 'employee',
     employee_id     UUID REFERENCES employees(id) ON DELETE SET NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE app_users ALTER COLUMN role SET DEFAULT 'employee';
 
 CREATE TABLE IF NOT EXISTS project_budgets (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),

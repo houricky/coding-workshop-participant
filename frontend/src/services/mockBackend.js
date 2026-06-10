@@ -21,34 +21,34 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 // --- Seed data -------------------------------------------------------------
 const db = {
   users: [
-    { id: '1', name: 'Dana Okafor', email: 'admin@acme.test', password: 'password', role: 'admin' },
+    { id: '1', name: 'ACME Admin', email: 'admin@acme.com', password: 'admin123', role: 'admin' },
   ],
   employees: [
-    { id: 'e1', name: 'Priya Nair', email: 'priya@acme.test', title: 'Staff Engineer', hourly_rate: 145, capacity_hours: 320 },
-    { id: 'e2', name: 'Marcus Lee', email: 'marcus@acme.test', title: 'Product Designer', hourly_rate: 120, capacity_hours: 320 },
-    { id: 'e3', name: 'Sofia Marin', email: 'sofia@acme.test', title: 'Data Engineer', hourly_rate: 135, capacity_hours: 320 },
-    { id: 'e4', name: 'Tomas Berg', email: 'tomas@acme.test', title: 'Frontend Engineer', hourly_rate: 110, capacity_hours: 320 },
-    { id: 'e5', name: 'Aisha Khan', email: 'aisha@acme.test', title: 'Project Lead', hourly_rate: 160, capacity_hours: 320 },
+    { id: 'e1', name: 'Priya Nair', email: 'priya@acme.test', role: 'manager', staff_type: 'direct', location: 'remote', title: 'Staff Engineer', hourly_rate: 145, capacity_hours: 320 },
+    { id: 'e2', name: 'Marcus Lee', email: 'marcus@acme.test', role: 'employee', staff_type: 'direct', location: 'on_site', title: 'Product Designer', hourly_rate: 120, capacity_hours: 320 },
+    { id: 'e3', name: 'Sofia Marin', email: 'sofia@acme.test', role: 'manager', staff_type: 'direct', location: 'remote', title: 'Data Engineer', hourly_rate: 135, capacity_hours: 320 },
+    { id: 'e4', name: 'Tomas Berg', email: 'tomas@acme.test', role: 'employee', staff_type: 'non_direct', location: 'remote', title: 'Frontend Engineer', hourly_rate: 110, capacity_hours: 320 },
+    { id: 'e5', name: 'Aisha Khan', email: 'aisha@acme.test', role: 'manager', staff_type: 'direct', location: 'on_site', title: 'Project Lead', hourly_rate: 160, capacity_hours: 320 },
   ],
   projects: [
-    { id: 'p1', name: 'Customer Portal Revamp', description: 'Rebuild the self-service portal on a modern stack.', stage: 'In progress', start_date: '2025-09-01', end_date: '2026-03-31', actual_completion_percent: 60, allocated_budget: 320000 },
-    { id: 'p2', name: 'Billing Migration', description: 'Migrate legacy billing to the new ledger.', stage: 'In progress', start_date: '2025-10-15', end_date: '2026-05-30', actual_completion_percent: 35, allocated_budget: 480000 },
-    { id: 'p3', name: 'Mobile App v2', description: 'Native rewrite with offline support.', stage: 'In progress', start_date: '2026-01-05', end_date: '2026-08-01', actual_completion_percent: 20, allocated_budget: 260000 },
-    { id: 'p4', name: 'Data Warehouse', description: 'Centralized analytics warehouse and pipelines.', stage: 'Planning', start_date: '2026-02-01', end_date: '2026-09-30', actual_completion_percent: 8, allocated_budget: 190000 },
-    { id: 'p5', name: 'Security Hardening', description: 'Org-wide security and compliance uplift.', stage: 'In progress', start_date: '2025-11-01', end_date: '2026-04-15', actual_completion_percent: 78, allocated_budget: 150000 },
+    { id: 'p1', project_manager_id: 'e1', name: 'Customer Portal Revamp', description: 'Rebuild the self-service portal on a modern stack.', stage: 'In progress', start_date: '2025-09-01', end_date: '2026-03-31', actual_completion_percent: 60, allocated_budget: 320000 },
+    { id: 'p2', project_manager_id: 'e3', name: 'Billing Migration', description: 'Migrate legacy billing to the new ledger.', stage: 'In progress', start_date: '2025-10-15', end_date: '2026-05-30', actual_completion_percent: 35, allocated_budget: 480000 },
+    { id: 'p3', project_manager_id: 'e5', name: 'Mobile App v2', description: 'Native rewrite with offline support.', stage: 'In progress', start_date: '2026-01-05', end_date: '2026-08-01', actual_completion_percent: 20, allocated_budget: 260000 },
+    { id: 'p4', project_manager_id: 'e3', name: 'Data Warehouse', description: 'Centralized analytics warehouse and pipelines.', stage: 'Planning', start_date: '2026-02-01', end_date: '2026-09-30', actual_completion_percent: 8, allocated_budget: 190000 },
+    { id: 'p5', project_manager_id: 'e5', name: 'Security Hardening', description: 'Org-wide security and compliance uplift.', stage: 'In progress', start_date: '2025-11-01', end_date: '2026-04-15', actual_completion_percent: 78, allocated_budget: 150000 },
   ],
   // allocations: planned hours/cost per employee per project
   allocations: [
-    { id: 'a1', project_id: 'p1', employee_id: 'e1', allocated_hours: 480, role_on_project: 'Tech lead' },
-    { id: 'a2', project_id: 'p1', employee_id: 'e2', allocated_hours: 360, role_on_project: 'Designer' },
-    { id: 'a3', project_id: 'p1', employee_id: 'e4', allocated_hours: 520, role_on_project: 'Engineer' },
-    { id: 'a4', project_id: 'p2', employee_id: 'e3', allocated_hours: 600, role_on_project: 'Data eng' },
-    { id: 'a5', project_id: 'p2', employee_id: 'e1', allocated_hours: 300, role_on_project: 'Engineer' },
-    { id: 'a6', project_id: 'p3', employee_id: 'e4', allocated_hours: 420, role_on_project: 'Engineer' },
-    { id: 'a7', project_id: 'p3', employee_id: 'e2', allocated_hours: 240, role_on_project: 'Designer' },
-    { id: 'a8', project_id: 'p4', employee_id: 'e3', allocated_hours: 200, role_on_project: 'Data eng' },
-    { id: 'a9', project_id: 'p5', employee_id: 'e5', allocated_hours: 260, role_on_project: 'Lead' },
-    { id: 'a10', project_id: 'p5', employee_id: 'e1', allocated_hours: 180, role_on_project: 'Engineer' },
+    { id: 'a1', project_id: 'p1', employee_id: 'e1', allocated_hours: 480, role_on_project: 'manager' },
+    { id: 'a2', project_id: 'p1', employee_id: 'e2', allocated_hours: 360, role_on_project: 'employee' },
+    { id: 'a3', project_id: 'p1', employee_id: 'e4', allocated_hours: 520, role_on_project: 'employee' },
+    { id: 'a4', project_id: 'p2', employee_id: 'e3', allocated_hours: 600, role_on_project: 'manager' },
+    { id: 'a5', project_id: 'p2', employee_id: 'e1', allocated_hours: 300, role_on_project: 'manager' },
+    { id: 'a6', project_id: 'p3', employee_id: 'e4', allocated_hours: 420, role_on_project: 'employee' },
+    { id: 'a7', project_id: 'p3', employee_id: 'e2', allocated_hours: 240, role_on_project: 'employee' },
+    { id: 'a8', project_id: 'p4', employee_id: 'e3', allocated_hours: 200, role_on_project: 'manager' },
+    { id: 'a9', project_id: 'p5', employee_id: 'e5', allocated_hours: 260, role_on_project: 'manager' },
+    { id: 'a10', project_id: 'p5', employee_id: 'e1', allocated_hours: 180, role_on_project: 'manager' },
   ],
   // usage: actual hours logged
   usage: [
@@ -78,6 +78,7 @@ function deriveProject(p) {
   const allocated_hours = allocs.reduce((s, a) => s + a.allocated_hours, 0);
   const allocated_cost = allocs.reduce((s, a) => s + a.allocated_hours * rateOf(a.employee_id), 0);
   const hours_used = uses.reduce((s, u) => s + u.hours_used, 0);
+  const managerIds = new Set([p.project_manager_id, ...allocs.filter((a) => a.role_on_project === 'manager').map((a) => a.employee_id)].filter(Boolean));
   const budget_used = uses.reduce((s, u) => s + u.hours_used * rateOf(u.employee_id), 0);
   const ragInput = {
     allocated_budget: p.allocated_budget,
@@ -99,6 +100,8 @@ function deriveProject(p) {
     budget_used_percent: Number(r.budgetUsedPercent.toFixed(1)),
     hours_used_percent: Number(r.hoursUsedPercent.toFixed(1)),
     team_size: new Set(allocs.map((a) => a.employee_id)).size,
+    manager_count: managerIds.size,
+    project_manager: db.employees.find((e) => e.id === p.project_manager_id) || null,
   };
 }
 
@@ -121,8 +124,18 @@ function deriveEmployee(e) {
 
 // --- Mock API --------------------------------------------------------------
 export const mockBackend = {
-  async register({ name, email, password, role = 'admin' }) {
+  async register({ name, email, password, role = 'employee' }) {
     await delay();
+    if (role === 'admin') {
+      const err = new Error('The admin account is managed by the system.');
+      err.status = 400;
+      throw err;
+    }
+    if (!['manager', 'employee'].includes(role)) {
+      const err = new Error('Invalid role.');
+      err.status = 400;
+      throw err;
+    }
     if (db.users.some((u) => u.email === email)) {
       const err = new Error('A user with that email already exists.');
       err.status = 409;
@@ -157,9 +170,14 @@ export const mockBackend = {
   },
 
   // Employees
-  async listEmployees() {
+  async listEmployees(filters = {}) {
     await delay();
-    return db.employees.map(deriveEmployee);
+    return db.employees
+      .filter((e) => !filters?.role || e.role === filters.role)
+      .filter((e) => filters?.is_direct_staff === undefined || filters?.is_direct_staff === '' || (e.staff_type === 'direct') === (filters.is_direct_staff === true || filters.is_direct_staff === 'true'))
+      .filter((e) => !filters?.work_location || e.location === filters.work_location)
+      .filter((e) => !filters?.search || e.name.toLowerCase().includes(String(filters.search).toLowerCase()) || e.email.toLowerCase().includes(String(filters.search).toLowerCase()))
+      .map(deriveEmployee);
   },
   async getEmployee(id) {
     await delay();
@@ -173,7 +191,7 @@ export const mockBackend = {
   },
   async createEmployee(payload) {
     await delay();
-    const e = { id: uid(), capacity_hours: 320, hourly_rate: 100, ...payload };
+    const e = { id: uid(), role: 'employee', staff_type: 'direct', location: 'remote', capacity_hours: 320, hourly_rate: 100, ...payload };
     db.employees.push(e);
     return deriveEmployee(e);
   },
@@ -214,6 +232,16 @@ export const mockBackend = {
   },
   async createProject(payload) {
     await delay();
+    if (!payload.project_manager_id) {
+      const err = new Error('Project manager is required.');
+      err.status = 400;
+      throw err;
+    }
+    if (db.employees.find((e) => e.id === payload.project_manager_id)?.role !== 'manager') {
+      const err = new Error('Project manager must have the manager role.');
+      err.status = 400;
+      throw err;
+    }
     const p = { id: uid(), actual_completion_percent: 0, stage: 'Planning', ...payload };
     db.projects.push(p);
     return deriveProject(p);
@@ -222,6 +250,16 @@ export const mockBackend = {
     await delay();
     const p = db.projects.find((x) => x.id === id);
     if (!p) throw notFound('Project');
+    if ('project_manager_id' in payload && !payload.project_manager_id) {
+      const err = new Error('Project manager is required.');
+      err.status = 400;
+      throw err;
+    }
+    if (payload.project_manager_id && db.employees.find((e) => e.id === payload.project_manager_id)?.role !== 'manager') {
+      const err = new Error('Project manager must have the manager role.');
+      err.status = 400;
+      throw err;
+    }
     Object.assign(p, payload);
     return deriveProject(p);
   },
@@ -317,10 +355,19 @@ export const mockBackend = {
     const projects = db.projects.map(deriveProject);
     const employees = db.employees.map(deriveEmployee);
     const byStatus = { Green: 0, Amber: 0, Red: 0 };
+    const activeByStatus = { Green: 0, Amber: 0, Red: 0 };
+    const activeProjects = projects.filter((p) => {
+      const stage = String(p.stage || '').toLowerCase();
+      return stage === 'active' || stage === 'in progress';
+    });
     projects.forEach((p) => { byStatus[p.rag_status] += 1; });
+    activeProjects.forEach((p) => { activeByStatus[p.rag_status] += 1; });
     return {
-      project_count: projects.length,
+      project_count: activeProjects.length,
+      active_project_count: activeProjects.length,
+      total_project_count: projects.length,
       rag_breakdown: byStatus,
+      active_rag_breakdown: activeByStatus,
       total_allocated_budget: projects.reduce((s, p) => s + p.allocated_budget, 0),
       total_budget_used: projects.reduce((s, p) => s + p.budget_used, 0),
       total_allocated_hours: projects.reduce((s, p) => s + p.allocated_hours, 0),

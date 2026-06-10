@@ -115,28 +115,6 @@ fi
 
 echo ""
 
-# Apply ACME database schema
-echo -e "  Applying database migrations..."
-export POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
-export POSTGRES_PORT="${POSTGRES_PORT:-5432}"
-export POSTGRES_NAME="${POSTGRES_NAME:-postgres}"
-export POSTGRES_USER="${POSTGRES_USER:-postgres}"
-export POSTGRES_PASS="${POSTGRES_PASS:-postgres123}"
-export ACME_SEED_DB="${ACME_SEED_DB:-true}"
-"$PROJECT_ROOT/database/migrate.sh" --seed > /tmp/db-migrate.log 2>&1 || {
-    echo -e "  ⚠ Database migration failed (see /tmp/db-migrate.log)"
-    tail -n 10 /tmp/db-migrate.log | sed 's/^/    /'
-}
-echo -e "  ✓ Database migrations applied"
-
-# Sync shared Python utilities into backend services
-if [ -f "$SCRIPT_DIR/sync-shared.sh" ]; then
-    "$SCRIPT_DIR/sync-shared.sh" > /dev/null 2>&1 || true
-    echo -e "  ✓ Shared backend utilities synced"
-fi
-
-echo ""
-
 # ============================================================
 # STEP 2: Check and Start MongoDB
 # ============================================================

@@ -9,8 +9,8 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState(USE_MOCK ? 'admin@acme.test' : '');
-  const [password, setPassword] = useState(USE_MOCK ? 'password' : '');
+  const [email, setEmail] = useState(USE_MOCK ? 'admin@acme.com' : '');
+  const [password, setPassword] = useState(USE_MOCK ? 'admin123' : '');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -78,7 +78,7 @@ export default function LoginPage() {
       {USE_MOCK && (
         <Box sx={{ mt: 3, p: 1.5, bgcolor: '#FBFBFC', border: '1px dashed rgba(27,42,74,0.2)', borderRadius: 1.5 }}>
           <Typography variant="caption" color="text.secondary">
-            Demo sign-in is pre-filled: <strong>admin@acme.test</strong> / <strong>password</strong>
+            Demo sign-in is pre-filled: <strong>admin@acme.com</strong> / <strong>admin123</strong>
           </Typography>
         </Box>
       )}

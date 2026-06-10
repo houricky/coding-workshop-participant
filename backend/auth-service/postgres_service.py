@@ -18,7 +18,7 @@ def _public_user(row: dict | None) -> dict | None:
     }
 
 
-def create_user(email: str, password_hash: str, role: str = "admin", employee_id: str | None = None) -> dict:
+def create_user(email: str, password_hash: str, role: str = "employee", employee_id: str | None = None) -> dict:
     conn = get_connection()
     try:
         with conn.cursor() as cur:

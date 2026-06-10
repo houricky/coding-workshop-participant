@@ -15,13 +15,13 @@ with zero setup, and switches to the real FastAPI service with a single env var.
 ```bash
 cp .env.sample .env      # default config runs entirely on mock data
 npm install
-npm run dev              # http://localhost:5173
+npm run dev              # http://localhost:3000
 ```
 
 Demo sign-in (mock mode, pre-filled on the login screen):
 
-- **Email:** `admin@acme.test`
-- **Password:** `password`
+- **Email:** `admin@acme.com`
+- **Password:** `admin123`
 
 Other scripts: `npm run build`, `npm run preview`, `npm run lint`.
 

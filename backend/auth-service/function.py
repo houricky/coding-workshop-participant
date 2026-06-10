@@ -48,9 +48,11 @@ def register(body: dict):
     if password_err:
         return error_response(400, "validation_error", password_err)
 
-    role = body.get("role", "admin")
+    role = body.get("role", "employee")
     if role not in ("admin", "manager", "employee"):
         return error_response(400, "validation_error", "Invalid role")
+    if role == "admin":
+        return error_response(400, "validation_error", "The admin account is managed by the system")
 
     employee_id = body.get("employee_id")
     user = create_user(email, hash_password(password), role, employee_id)

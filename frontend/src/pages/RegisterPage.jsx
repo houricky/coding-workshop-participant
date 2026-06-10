@@ -16,7 +16,7 @@ import { apiErrorMessage } from '../services/api';
 export default function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'admin' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'employee' });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -66,9 +66,8 @@ export default function RegisterPage() {
           fullWidth
         />
         <TextField label="Role" select value={form.role} onChange={set('role')} fullWidth>
-          <MenuItem value="admin">Admin</MenuItem>
-          <MenuItem value="manager">Manager</MenuItem>
           <MenuItem value="employee">Employee</MenuItem>
+          <MenuItem value="manager">Manager</MenuItem>
         </TextField>
         <Button variant="contained" size="large" onClick={handleSubmit} disabled={submitting}>
           {submitting ? 'Creating account…' : 'Create account'}

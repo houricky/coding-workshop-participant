@@ -11,6 +11,11 @@ import { employees as employeesApi, apiErrorMessage } from '../services/api';
 import { money, hours, initials, percent, clampPercent } from '../utils/format';
 import { rag } from '../theme';
 
+const roleLabel = (role) => ({ admin: 'Admin', manager: 'Manager', employee: 'Employee' }[role] || role || 'Employee');
+const projectRoleLabel = (role) => ({ manager: 'Manager', employee: 'Employee' }[role] || 'Employee');
+const staffLabel = (type) => (type === 'non_direct' ? 'Non-direct' : 'Direct');
+const locationLabel = (location) => (location === 'on_site' ? 'On-site' : 'Remote');
+
 export default function EmployeeDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -44,7 +49,10 @@ export default function EmployeeDetailPage() {
                 {e.overallocated && <Chip size="small" label="Overallocated" sx={{ bgcolor: rag.red.soft, color: rag.red.text }} />}
               </Stack>
               <Box sx={{ mt: 2 }}>
-                <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Rate</Typography><Typography variant="body2" className="tnum">{money(e.hourly_rate)}/h</Typography></Stack>
+                <Stack direction="row" justifyContent="space-between"><Typography variant="body2" color="text.secondary">Role</Typography><Typography variant="body2">{roleLabel(e.role)}</Typography></Stack>
+                <Stack direction="row" justifyContent="space-between" sx={{ mt: 1 }}><Typography variant="body2" color="text.secondary">Staff</Typography><Typography variant="body2">{staffLabel(e.staff_type)}</Typography></Stack>
+                <Stack direction="row" justifyContent="space-between" sx={{ mt: 1 }}><Typography variant="body2" color="text.secondary">Location</Typography><Typography variant="body2">{locationLabel(e.location)}</Typography></Stack>
+                <Stack direction="row" justifyContent="space-between" sx={{ mt: 1 }}><Typography variant="body2" color="text.secondary">Rate</Typography><Typography variant="body2" className="tnum">{money(e.hourly_rate)}/h</Typography></Stack>
                 <Stack direction="row" justifyContent="space-between" sx={{ mt: 1 }}><Typography variant="body2" color="text.secondary">Capacity</Typography><Typography variant="body2" className="tnum">{hours(e.capacity_hours)}</Typography></Stack>
                 <Stack direction="row" justifyContent="space-between" sx={{ mt: 1 }}><Typography variant="body2" color="text.secondary">Allocated</Typography><Typography variant="body2" className="tnum">{hours(e.allocated_hours)}</Typography></Stack>
                 <Stack direction="row" justifyContent="space-between" sx={{ mt: 1 }}><Typography variant="body2" color="text.secondary">Logged</Typography><Typography variant="body2" className="tnum">{hours(e.hours_used)}</Typography></Stack>
@@ -83,7 +91,7 @@ export default function EmployeeDetailPage() {
                           {a.project?.name}
                         </Link>
                       </TableCell>
-                      <TableCell><Typography variant="body2" color="text.secondary">{a.role_on_project}</Typography></TableCell>
+                      <TableCell><Typography variant="body2" color="text.secondary">{projectRoleLabel(a.role_on_project)}</Typography></TableCell>
                       <TableCell>{a.project && <RagChip status={a.project.rag_status} />}</TableCell>
                       <TableCell align="right" className="tnum">{hours(a.allocated_hours)}</TableCell>
                     </TableRow>
