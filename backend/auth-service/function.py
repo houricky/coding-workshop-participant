@@ -32,7 +32,7 @@ def handler(event=None, context=None):
     except ValueError as e:
         return error_response(400, "validation_error", str(e))
     except Exception as e:
-        logger.error("Handler error: %s", e)
+        logger.exception("Handler error")
         return error_response(500, "internal_error", str(e))
 
 

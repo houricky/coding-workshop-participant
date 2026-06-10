@@ -196,7 +196,15 @@ terraform.rc
 backend/*/jwt/
 backend/*/psycopg/
 backend/*/psycopg-*.dist-info/
+backend/*/psycopg_binary/
+backend/*/psycopg_binary-*.dist-info/
 backend/*/psycopg_binary.libs/
+backend/*/bcrypt/
+backend/*/bcrypt-*.dist-info/
+backend/*/cffi/
+backend/*/cffi-*.dist-info/
+backend/*/pycparser/
+backend/*/pycparser-*.dist-info/
 backend/*/PyJWT-*.dist-info/
 backend/*/typing_extensions-*.dist-info/
 
