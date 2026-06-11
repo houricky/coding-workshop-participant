@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField,
-  MenuItem, Stack,
+  MenuItem, Stack, Autocomplete, Chip, Alert,
 } from '@mui/material';
 import { EntityAutocomplete } from './ui';
 
@@ -18,6 +18,7 @@ const empty = {
   due_date: '',
   employee_id: '',
   status: 'pending',
+  dependency_ids: [],
 };
 
 export default function DeliverableFormDialog({
@@ -26,12 +27,14 @@ export default function DeliverableFormDialog({
   projectId,
   projectOptions = [],
   assigneeOptions = [],
+  dependencyOptions = [],
   currentUser,
   onClose,
   onSubmit,
 }) {
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const isEdit = !!initial?.id;
   const isEmployee = currentUser?.role === 'employee';
   const initialAssigneeId = initial?.employee_id ?? initial?.assigned_employee_id ?? '';
@@ -43,7 +46,9 @@ export default function DeliverableFormDialog({
         ...empty,
         ...initial,
         employee_id: initial.employee_id ?? initial.assigned_employee_id ?? '',
+        dependency_ids: initial.blocked_by?.map((node) => node.id) || [],
       } : empty);
+      setSaveError('');
     }
   }, [open, initial]);
 
@@ -67,9 +72,33 @@ export default function DeliverableFormDialog({
     : projectAssignees;
   const lockEmployeeFields = isEmployee && isEdit;
   const lockEmployeeAssignee = isEmployee && isEdit && !!initialAssigneeId;
+  const canManageDependencies = !lockEmployeeFields;
+  const blockedByOptions = initial?.blocked_by?.map((node) => ({
+    id: node.id,
+    title: node.title,
+    project_id: node.project_id,
+    project: { name: node.project_name },
+    project_name: node.project_name,
+    status: node.status,
+  })) || [];
+  const dependencyOptionMap = new Map([...dependencyOptions, ...blockedByOptions]
+    .filter((option) => option?.id && option.id !== initial?.id)
+    .map((option) => [String(option.id), option]));
+  const availableDependencies = [...dependencyOptionMap.values()].sort((a, b) => (
+    (a?.project?.name || a?.project_name || '').localeCompare(b?.project?.name || b?.project_name || '')
+    || (a?.title || '').localeCompare(b?.title || '')
+  ));
+  const selectedDependencies = form.dependency_ids
+    .map((id) => dependencyOptionMap.get(String(id)))
+    .filter(Boolean);
+  const dependencyLabel = (option) => {
+    const projectName = option?.project?.name || option?.project_name;
+    return [option?.title, projectName].filter(Boolean).join(' · ');
+  };
 
   const handleSubmit = async () => {
     setSaving(true);
+    setSaveError('');
     try {
       const payload = lockEmployeeFields
         ? {
@@ -84,8 +113,10 @@ export default function DeliverableFormDialog({
           employee_id: form.employee_id || null,
           status: form.status,
         };
-      await onSubmit(payload);
+      await onSubmit(payload, { dependencyIds: form.dependency_ids });
       onClose();
+    } catch (error) {
+      setSaveError(error?.response?.data?.detail || error?.message || 'Unable to save deliverable.');
     } finally {
       setSaving(false);
     }
@@ -96,6 +127,7 @@ export default function DeliverableFormDialog({
       <DialogTitle>{isEdit ? 'Edit deliverable' : 'Add deliverable'}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 0.5 }}>
+          {saveError && <Alert severity="error">{saveError}</Alert>}
           {!projectId && (
             <EntityAutocomplete
               label="Project"
@@ -122,6 +154,34 @@ export default function DeliverableFormDialog({
             allowNone
             noneLabel="Unassigned"
           />
+          {canManageDependencies && (
+            <Autocomplete
+              multiple
+              options={availableDependencies}
+              value={selectedDependencies}
+              onChange={(_, value) => setForm((current) => ({ ...current, dependency_ids: value.map((option) => option.id) }))}
+              getOptionLabel={dependencyLabel}
+              isOptionEqualToValue={(option, selectedOption) => String(option.id) === String(selectedOption.id)}
+              groupBy={(option) => option?.project?.name || option?.project_name || 'Other projects'}
+              filterSelectedOptions
+              autoHighlight
+              openOnFocus
+              renderTags={(value, getTagProps) => value.map((option, index) => (
+                <Chip {...getTagProps({ index })} key={option.id} label={dependencyLabel(option)} size="small" />
+              ))}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Depends on"
+                  placeholder={selectedDependencies.length ? '' : 'Search deliverables'}
+                  inputProps={{
+                    ...params.inputProps,
+                    autoComplete: 'new-password',
+                  }}
+                />
+              )}
+            />
+          )}
           <TextField label="Status" select value={form.status} onChange={set('status')} fullWidth>
             {STATUSES.map((status) => (
               <MenuItem key={status.value} value={status.value}>{status.label}</MenuItem>

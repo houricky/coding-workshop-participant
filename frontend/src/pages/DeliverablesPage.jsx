@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Alert, Box, Button, Card, CardContent, Chip, Grid, IconButton, Link, MenuItem,
-  Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  Alert, Box, Button, Card, Checkbox, Chip, FormControlLabel,
+  IconButton, Link, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, Tooltip, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -33,10 +33,12 @@ const deliverableStatusColor = (status) => ({ completed: 'success', in_progress:
 export default function DeliverablesPage() {
   const navigate = useNavigate();
   const [rows, setRows] = useState(null);
+  const [allDeliverables, setAllDeliverables] = useState([]);
   const [projects, setProjects] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [allocations, setAllocations] = useState([]);
   const [filters, setFilters] = useState({ project_id: '', employee_id: '', status: '' });
+  const [blocksOnly, setBlocksOnly] = useState(false);
   const [error, setError] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [toEdit, setToEdit] = useState(null);
@@ -49,12 +51,14 @@ export default function DeliverablesPage() {
     setError('');
     Promise.all([
       deliverablesApi.list(params),
+      deliverablesApi.list(),
       projectsApi.list(),
       employeesApi.list(),
       allocationsApi.list(),
     ])
-      .then(([deliverableRows, projectRows, employeeRows, allocationRows]) => {
+      .then(([deliverableRows, allDeliverableRows, projectRows, employeeRows, allocationRows]) => {
         setRows(deliverableRows);
+        setAllDeliverables(allDeliverableRows);
         setProjects(projectRows);
         setEmployees(employeeRows);
         setAllocations(allocationRows);
@@ -66,6 +70,10 @@ export default function DeliverablesPage() {
 
   const setFilter = (key) => (event) => setFilters((current) => ({ ...current, [key]: event.target.value }));
   const setFilterValue = (key) => (value) => setFilters((current) => ({ ...current, [key]: value }));
+  const filteredRows = useMemo(
+    () => rows?.filter((deliverable) => !blocksOnly || deliverable.blocks_count > 0) || [],
+    [blocksOnly, rows],
+  );
   const openDialog = (deliverable = null) => {
     setToEdit(deliverable);
     setDialogOpen(true);
@@ -74,12 +82,27 @@ export default function DeliverablesPage() {
     setDialogOpen(false);
     setToEdit(null);
   };
-  const saveDeliverable = async (payload) => {
-    if (toEdit?.id) {
-      await deliverablesApi.update(toEdit.id, payload);
-    } else {
-      await deliverablesApi.create(payload);
-    }
+  const syncDeliverableDependencies = async (deliverableId, dependencyIds) => {
+    if (!Array.isArray(dependencyIds)) return;
+    const selectedIds = new Set(dependencyIds || []);
+    const existingEdges = toEdit?.blocked_by || [];
+    await Promise.all(existingEdges
+      .filter((edge) => !selectedIds.has(edge.id))
+      .map((edge) => deliverablesApi.removeDependency(edge.dependency_id)));
+
+    const existingIds = new Set(existingEdges.map((edge) => edge.id));
+    await Promise.all((dependencyIds || [])
+      .filter((dependencyId) => !existingIds.has(dependencyId))
+      .map((dependencyId) => deliverablesApi.createDependency({
+        deliverable_id: deliverableId,
+        depends_on_deliverable_id: dependencyId,
+      })));
+  };
+  const saveDeliverable = async (payload, options = {}) => {
+    const saved = toEdit?.id
+      ? await deliverablesApi.update(toEdit.id, payload)
+      : await deliverablesApi.create(payload);
+    await syncDeliverableDependencies(toEdit?.id || saved.id, options.dependencyIds);
     load();
   };
   const confirmDelete = async () => {
@@ -126,41 +149,40 @@ export default function DeliverablesPage() {
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      <Card sx={{ mb: 2.5 }}>
-        <CardContent>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={4}>
-              <EntityAutocomplete
-                label="Project"
-                options={projects}
-                value={filters.project_id}
-                onChange={setFilterValue('project_id')}
-                placeholder="Search projects"
-                allowNone
-                noneLabel="All projects"
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <EntityAutocomplete
-                label="Assignee"
-                options={employees}
-                value={filters.employee_id}
-                onChange={setFilterValue('employee_id')}
-                placeholder="Search assignees"
-                allowNone
-                noneLabel="All assignees"
-              />
-            </Grid>
-            <Grid item xs={12} md={4}>
-              <TextField select size="small" label="Status" value={filters.status} onChange={setFilter('status')} fullWidth>
-                {STATUSES.map((status) => <MenuItem key={status.value} value={status.value}>{status.label}</MenuItem>)}
-              </TextField>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }} alignItems={{ xs: 'stretch', sm: 'center' }}>
+        <Box sx={{ minWidth: 220, maxWidth: 280, width: '100%' }}>
+          <EntityAutocomplete
+            label="Project"
+            options={projects}
+            value={filters.project_id}
+            onChange={setFilterValue('project_id')}
+            placeholder="Search projects"
+            allowNone
+            noneLabel="All projects"
+          />
+        </Box>
+        <Box sx={{ minWidth: 220, maxWidth: 280, width: '100%' }}>
+          <EntityAutocomplete
+            label="Assignee"
+            options={employees}
+            value={filters.employee_id}
+            onChange={setFilterValue('employee_id')}
+            placeholder="Search assignees"
+            allowNone
+            noneLabel="All assignees"
+          />
+        </Box>
+        <TextField select size="small" label="Status" value={filters.status} onChange={setFilter('status')} sx={{ minWidth: 160 }}>
+          {STATUSES.map((status) => <MenuItem key={status.value} value={status.value}>{status.label}</MenuItem>)}
+        </TextField>
+        <FormControlLabel
+          control={<Checkbox checked={blocksOnly} onChange={(event) => setBlocksOnly(event.target.checked)} />}
+          label="Blocks other work"
+          sx={{ minHeight: 40, ml: { xs: 0, sm: 0.25 }, whiteSpace: 'nowrap' }}
+        />
+      </Stack>
 
-      {rows.length === 0 ? (
+      {filteredRows.length === 0 ? (
         <EmptyState title="No deliverables found" description="Adjust the filters or add a deliverable to a project." />
       ) : (
         <Card>
@@ -177,7 +199,7 @@ export default function DeliverablesPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {rows.map((deliverable) => (
+                {filteredRows.map((deliverable) => (
                   <TableRow key={deliverable.id} hover onClick={() => navigate(`/projects/${deliverable.project_id}`)} sx={{ cursor: 'pointer' }}>
                     <TableCell>
                       <Box>
@@ -244,7 +266,8 @@ export default function DeliverablesPage() {
       )}
 
       <DeliverableFormDialog open={dialogOpen} initial={toEdit} projectOptions={projectOptions}
-        assigneeOptions={assigneeOptions} currentUser={user} onClose={closeDialog} onSubmit={saveDeliverable} />
+        assigneeOptions={assigneeOptions} dependencyOptions={allDeliverables}
+        currentUser={user} onClose={closeDialog} onSubmit={saveDeliverable} />
       <ConfirmDialog open={!!toDelete} title="Delete deliverable?" confirmLabel="Delete"
         message={`Delete ${toDelete?.title || 'this deliverable'}?`}
         onClose={() => setToDelete(null)} onConfirm={confirmDelete} />

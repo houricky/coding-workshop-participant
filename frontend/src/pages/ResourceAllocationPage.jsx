@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Card, CardContent, Table, TableHead, TableBody, TableRow, TableCell, TableContainer,
-  Button, Box, Stack, TextField, MenuItem, IconButton, Tooltip, Alert, Grid, Typography,
+  Card, Table, TableHead, TableBody, TableRow, TableCell, TableContainer,
+  Button, Box, Stack, TextField, MenuItem, IconButton, Tooltip, Alert, Typography,
+  Dialog, DialogTitle, DialogContent, DialogActions,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -17,8 +18,13 @@ export default function ResourceAllocationPage() {
   const [employees, setEmployees] = useState([]);
   const [error, setError] = useState('');
   const [toDelete, setToDelete] = useState(null);
+  const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({ project_id: '', employee_id: '', allocated_hours: '', role_on_project: '' });
   const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState('');
+  const [projectFilter, setProjectFilter] = useState('');
+  const [employeeFilter, setEmployeeFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState('All');
 
   const load = () => {
     setError('');
@@ -31,6 +37,15 @@ export default function ResourceAllocationPage() {
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const setValue = (k) => (value) => setForm((f) => ({ ...f, [k]: value }));
   const valid = form.project_id && form.employee_id && form.role_on_project && Number(form.allocated_hours) > 0;
+  const filtered = useMemo(() => {
+    if (!rows) return [];
+    const q = query.trim().toLowerCase();
+    return rows
+      .filter((a) => !projectFilter || a.project_id === projectFilter)
+      .filter((a) => !employeeFilter || a.employee_id === employeeFilter)
+      .filter((a) => roleFilter === 'All' || a.role_on_project === roleFilter)
+      .filter((a) => !q || [a.employee?.name, a.project?.name].some((value) => String(value || '').toLowerCase().includes(q)));
+  }, [employeeFilter, projectFilter, query, roleFilter, rows]);
 
   const handleAdd = async () => {
     if (!valid) return;
@@ -38,6 +53,7 @@ export default function ResourceAllocationPage() {
     try {
       await allocApi.create({ ...form, allocated_hours: Number(form.allocated_hours) });
       setForm({ project_id: '', employee_id: '', allocated_hours: '', role_on_project: '' });
+      setAddOpen(false);
       load();
     } catch (e) {
       setError(apiErrorMessage(e));
@@ -54,38 +70,42 @@ export default function ResourceAllocationPage() {
 
   return (
     <Box>
-      <PageHeader title="Resource allocation" subtitle="Plan who works on what, and for how many hours." />
+      <PageHeader
+        title="Resource allocation"
+        subtitle="Plan who works on what, and for how many hours."
+        action={
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
+            Add allocation
+          </Button>
+        }
+      />
 
-      <Card sx={{ mb: 2.5 }}>
-        <CardContent>
-          <Typography variant="overline" color="text.secondary">Add allocation</Typography>
-          <Grid container spacing={2} sx={{ mt: 0 }} alignItems="flex-start">
-            <Grid item xs={12} sm={6} md={3}>
-              <EntityAutocomplete label="Project" options={projects} value={form.project_id} onChange={setValue('project_id')} placeholder="Search projects" />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <EntityAutocomplete label="Employee" options={employees} value={form.employee_id} onChange={setValue('employee_id')} placeholder="Search employees" />
-            </Grid>
-            <Grid item xs={6} sm={4} md={2}>
-              <TextField size="small" label="Hours" type="number" value={form.allocated_hours} onChange={set('allocated_hours')} fullWidth />
-            </Grid>
-            <Grid item xs={6} sm={4} md={2}>
-              <TextField select size="small" label="Role" value={form.role_on_project} onChange={set('role_on_project')} fullWidth>
-                <MenuItem value="employee">Employee</MenuItem>
-                <MenuItem value="manager">Manager</MenuItem>
-              </TextField>
-            </Grid>
-            <Grid item xs={12} sm={4} md={2}>
-              <Button variant="contained" startIcon={<AddIcon />} onClick={handleAdd} disabled={!valid || saving} fullWidth sx={{ height: 40 }}>
-                Add
-              </Button>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
+        <TextField size="small" placeholder="Search allocations" value={query}
+          onChange={(e) => setQuery(e.target.value)} sx={{ maxWidth: 280 }} fullWidth />
+        <Box sx={{ minWidth: 220, maxWidth: 280, width: '100%' }}>
+          <EntityAutocomplete label="Project" options={projects} value={projectFilter} onChange={setProjectFilter}
+            placeholder="Search projects" allowNone noneLabel="All projects" />
+        </Box>
+        <Box sx={{ minWidth: 220, maxWidth: 280, width: '100%' }}>
+          <EntityAutocomplete label="Employee" options={employees} value={employeeFilter} onChange={setEmployeeFilter}
+            placeholder="Search employees" allowNone noneLabel="All employees" />
+        </Box>
+        <TextField size="small" select label="Role" value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)} sx={{ minWidth: 140 }}>
+          <MenuItem value="All">All</MenuItem>
+          <MenuItem value="employee">Employee</MenuItem>
+          <MenuItem value="manager">Manager</MenuItem>
+        </TextField>
+      </Stack>
 
       {rows.length === 0 ? (
-        <EmptyState title="No allocations yet" description="Allocate people to projects above to start planning capacity." />
+        <EmptyState title="No allocations yet" description="Allocate people to projects to start planning capacity."
+          action={<Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>Add allocation</Button>} />
+      ) : filtered.length === 0 ? (
+        <EmptyState title="No matches" description="Try a different allocation filter." />
       ) : (
         <Card>
           <TableContainer>
@@ -101,7 +121,7 @@ export default function ResourceAllocationPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {rows.map((a) => (
+                {filtered.map((a) => (
                   <TableRow key={a.id} hover>
                     <TableCell>{a.employee?.name}</TableCell>
                     <TableCell>{a.project?.name}</TableCell>
@@ -121,6 +141,26 @@ export default function ResourceAllocationPage() {
         </Card>
       )}
 
+      <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add allocation</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 0.5 }}>
+            <EntityAutocomplete label="Project" options={projects} value={form.project_id} onChange={setValue('project_id')} placeholder="Search projects" size="medium" />
+            <EntityAutocomplete label="Employee" options={employees} value={form.employee_id} onChange={setValue('employee_id')} placeholder="Search employees" size="medium" />
+            <TextField label="Hours" type="number" value={form.allocated_hours} onChange={set('allocated_hours')} fullWidth />
+            <TextField select label="Role" value={form.role_on_project} onChange={set('role_on_project')} fullWidth>
+              <MenuItem value="employee">Employee</MenuItem>
+              <MenuItem value="manager">Manager</MenuItem>
+            </TextField>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setAddOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleAdd} disabled={!valid || saving}>
+            {saving ? 'Saving…' : 'Add allocation'}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <ConfirmDialog open={!!toDelete} title="Remove allocation?" confirmLabel="Remove"
         message={`Remove ${toDelete?.employee?.name} from ${toDelete?.project?.name}?`}
         onClose={() => setToDelete(null)} onConfirm={confirmDelete} />

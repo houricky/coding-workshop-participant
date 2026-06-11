@@ -45,6 +45,7 @@ export default function ProjectDetailPage() {
   const navigate = useNavigate();
   const [p, setP] = useState(null);
   const [employees, setEmployees] = useState([]);
+  const [allDeliverables, setAllDeliverables] = useState([]);
   const [error, setError] = useState('');
   const [editOpen, setEditOpen] = useState(false);
   const [deliverableOpen, setDeliverableOpen] = useState(false);
@@ -54,8 +55,12 @@ export default function ProjectDetailPage() {
 
   const load = useCallback(() => {
     setError('');
-    Promise.all([projectsApi.get(id), employeesApi.list()])
-      .then(([project, employeeRows]) => { setP(project); setEmployees(employeeRows); })
+    Promise.all([projectsApi.get(id), employeesApi.list(), deliverablesApi.list()])
+      .then(([project, employeeRows, deliverableRows]) => {
+        setP(project);
+        setEmployees(employeeRows);
+        setAllDeliverables(deliverableRows);
+      })
       .catch((e) => setError(apiErrorMessage(e)));
   }, [id]);
   useEffect(load, [load]);
@@ -92,12 +97,27 @@ export default function ProjectDetailPage() {
     setDeliverableOpen(false);
     setDeliverableToEdit(null);
   };
-  const saveDeliverable = async (payload) => {
-    if (deliverableToEdit?.id) {
-      await deliverablesApi.update(deliverableToEdit.id, payload);
-    } else {
-      await deliverablesApi.create(payload);
-    }
+  const syncDeliverableDependencies = async (deliverableId, dependencyIds) => {
+    if (!Array.isArray(dependencyIds)) return;
+    const selectedIds = new Set(dependencyIds || []);
+    const existingEdges = deliverableToEdit?.blocked_by || [];
+    await Promise.all(existingEdges
+      .filter((edge) => !selectedIds.has(edge.id))
+      .map((edge) => deliverablesApi.removeDependency(edge.dependency_id)));
+
+    const existingIds = new Set(existingEdges.map((edge) => edge.id));
+    await Promise.all((dependencyIds || [])
+      .filter((dependencyId) => !existingIds.has(dependencyId))
+      .map((dependencyId) => deliverablesApi.createDependency({
+        deliverable_id: deliverableId,
+        depends_on_deliverable_id: dependencyId,
+      })));
+  };
+  const saveDeliverable = async (payload, options = {}) => {
+    const saved = deliverableToEdit?.id
+      ? await deliverablesApi.update(deliverableToEdit.id, payload)
+      : await deliverablesApi.create(payload);
+    await syncDeliverableDependencies(deliverableToEdit?.id || saved.id, options.dependencyIds);
     load();
   };
   const confirmDeleteDeliverable = async () => {
@@ -349,7 +369,8 @@ export default function ProjectDetailPage() {
       <ProjectFormDialog open={editOpen} initial={p} managerOptions={managerOptions} onClose={() => setEditOpen(false)}
         onSubmit={async (payload) => { await projectsApi.update(p.id, payload); load(); }} />
       <DeliverableFormDialog open={deliverableOpen} initial={deliverableToEdit} projectId={p.id}
-        assigneeOptions={assigneeOptions} currentUser={user} onClose={closeDeliverableDialog} onSubmit={saveDeliverable} />
+        assigneeOptions={assigneeOptions} dependencyOptions={allDeliverables}
+        currentUser={user} onClose={closeDeliverableDialog} onSubmit={saveDeliverable} />
       <ConfirmDialog open={!!deliverableToDelete} title="Delete deliverable?" confirmLabel="Delete"
         message={`Delete ${deliverableToDelete?.title || 'this deliverable'}?`}
         onClose={() => setDeliverableToDelete(null)} onConfirm={confirmDeleteDeliverable} />
