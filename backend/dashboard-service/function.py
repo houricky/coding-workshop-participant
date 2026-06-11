@@ -19,17 +19,18 @@ def handler(event=None, context=None):
         if req["method"] == "OPTIONS":
             return preflight_response()
 
-        if not get_auth_context(req["headers"]):
+        auth = get_auth_context(req["headers"])
+        if not auth:
             return error_response(401, "unauthorized", "Missing or invalid token")
 
         method, path = req["method"], req["path"]
 
         if method == "GET" and path == "/":
-            return portfolio()
+            return portfolio(auth)
         if method == "GET" and path == "/overallocations":
-            return overallocations()
+            return overallocations(auth)
         if method == "GET" and path == "/projects-at-risk":
-            return projects_at_risk()
+            return projects_at_risk(auth)
 
         return error_response(404, "not_found", f"No route for {method} {path}")
     except Exception as e:
@@ -37,16 +38,20 @@ def handler(event=None, context=None):
         return error_response(500, "internal_error", str(e))
 
 
-def portfolio():
-    data = get_portfolio_dashboard()
+def scoped_employee_id(auth: dict) -> str | None:
+    return auth.get("employee_id") if auth.get("role") == "employee" else None
+
+
+def portfolio(auth: dict):
+    data = get_portfolio_dashboard(scoped_employee_id(auth))
     return json_response(200, data)
 
 
-def overallocations():
-    rows = get_overallocations()
+def overallocations(auth: dict):
+    rows = get_overallocations(scoped_employee_id(auth))
     return json_response(200, {"overallocations": rows, "count": len(rows)})
 
 
-def projects_at_risk():
-    rows = get_projects_at_risk()
+def projects_at_risk(auth: dict):
+    rows = get_projects_at_risk(scoped_employee_id(auth))
     return json_response(200, {"projects": rows, "count": len(rows)})

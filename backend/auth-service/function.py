@@ -56,7 +56,7 @@ def register(body: dict):
 
     employee_id = body.get("employee_id")
     user = create_user(email, hash_password(password), role, employee_id)
-    token = create_token(user["id"], user["role"])
+    token = create_token(user["id"], user["role"], user.get("employee_id"))
     return json_response(201, {
         "token": token,
         "user": {
@@ -84,7 +84,7 @@ def login(body: dict):
     if not user or not verify_password(password, user["password_hash"]):
         return error_response(401, "unauthorized", "Invalid email or password")
 
-    token = create_token(user["id"], user["role"])
+    token = create_token(user["id"], user["role"], user.get("employee_id"))
     return json_response(200, {
         "token": token,
         "user": {

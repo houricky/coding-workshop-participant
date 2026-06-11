@@ -10,6 +10,8 @@ from postgres_service import (
     delete_project,
     get_project,
     get_project_summary,
+    is_employee_allocated,
+    is_project_lead,
     list_projects,
     update_project,
 )
@@ -39,13 +41,13 @@ def handler(event=None, context=None):
         subpath = path.lstrip("/")
         summary_match = match_path(["{id}", "summary"], subpath)
         if summary_match and method == "GET":
-            return get_summary(summary_match["id"])
+            return get_summary(summary_match["id"], auth)
 
         if path == "/":
             if method == "GET":
-                return list_all(query)
+                return list_all(query, auth)
             if method == "POST":
-                return create(body)
+                return create(body, auth)
             return error_response(405, "method_not_allowed", f"{method} not allowed")
 
         if path.startswith("/") and len(path) > 1:
@@ -53,11 +55,11 @@ def handler(event=None, context=None):
             if not is_valid_uuid(project_id):
                 return error_response(400, "validation_error", "Invalid project ID")
             if method == "GET":
-                return get_one(project_id)
+                return get_one(project_id, auth)
             if method == "PUT":
-                return update(project_id, body)
+                return update(project_id, body, auth)
             if method == "DELETE":
-                return remove(project_id)
+                return remove(project_id, auth)
             return error_response(405, "method_not_allowed", f"{method} not allowed")
 
         return error_response(404, "not_found", f"No route for {method} {path}")
@@ -68,12 +70,19 @@ def handler(event=None, context=None):
         return error_response(500, "internal_error", str(e))
 
 
-def list_all(query: dict):
-    projects = list_projects(query.get("stage"), query.get("rag_status"), query.get("search"))
+def forbidden():
+    return error_response(403, "forbidden", "You do not have permission to perform this action")
+
+
+def list_all(query: dict, auth: dict):
+    allocated_employee_id = auth.get("employee_id") if auth.get("role") == "employee" else None
+    projects = list_projects(query.get("stage"), query.get("rag_status"), query.get("search"), allocated_employee_id)
     return json_response(200, {"projects": projects, "count": len(projects)})
 
 
-def create(body: dict):
+def create(body: dict, auth: dict):
+    if auth.get("role") != "admin":
+        return forbidden()
     missing = require_fields(body, ["name", "project_manager_id"])
     if missing:
         return error_response(400, "validation_error", "Missing required fields", {"fields": missing})
@@ -98,23 +107,31 @@ def create(body: dict):
     return json_response(201, {"project": project})
 
 
-def get_one(project_id: str):
+def get_one(project_id: str, auth: dict):
     project = get_project(project_id)
     if not project:
         return error_response(404, "not_found", "Project not found")
+    if auth.get("role") == "employee" and not is_employee_allocated(project_id, auth.get("employee_id")):
+        return forbidden()
     return json_response(200, {"project": project})
 
 
-def get_summary(project_id: str):
+def get_summary(project_id: str, auth: dict):
     if not is_valid_uuid(project_id):
         return error_response(400, "validation_error", "Invalid project ID")
     summary = get_project_summary(project_id)
     if not summary:
         return error_response(404, "not_found", "Project not found")
+    if auth.get("role") == "employee" and not is_employee_allocated(project_id, auth.get("employee_id")):
+        return forbidden()
     return json_response(200, {"summary": summary})
 
 
-def update(project_id: str, body: dict):
+def update(project_id: str, body: dict, auth: dict):
+    if auth.get("role") == "employee":
+        return forbidden()
+    if auth.get("role") == "manager" and not is_project_lead(project_id, auth.get("employee_id")):
+        return forbidden()
     if body.get("project_manager_id") and not is_valid_uuid(body["project_manager_id"]):
         return error_response(400, "validation_error", "Invalid project_manager_id")
     if body.get("stage") and body["stage"] not in VALID_STAGES:
@@ -135,7 +152,9 @@ def update(project_id: str, body: dict):
     return json_response(200, {"project": project})
 
 
-def remove(project_id: str):
+def remove(project_id: str, auth: dict):
+    if auth.get("role") != "admin":
+        return forbidden()
     if not delete_project(project_id):
         return error_response(404, "not_found", "Project not found")
     return no_content()

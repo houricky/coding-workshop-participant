@@ -22,6 +22,11 @@ def create_user(email: str, password_hash: str, role: str = "employee", employee
     conn = get_connection()
     try:
         with conn.cursor() as cur:
+            if employee_id is None:
+                cur.execute("SELECT id FROM employees WHERE email = %s", (email,))
+                employee = cur.fetchone()
+                if employee:
+                    employee_id = employee["id"]
             cur.execute(
                 """
                 INSERT INTO app_users (email, password_hash, role, employee_id)

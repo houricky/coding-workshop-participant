@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import {
+  Autocomplete,
   Card,
   CardContent,
   Typography,
@@ -6,6 +8,7 @@ import {
   Stack,
   Button,
   CircularProgress,
+  TextField,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -13,6 +16,85 @@ import {
   DialogActions,
 } from '@mui/material';
 import { command, glass } from '../theme';
+
+export function EntityAutocomplete({
+  label,
+  options = [],
+  value,
+  onChange,
+  getOptionLabel = (option) => option?.name || '',
+  placeholder = 'Search',
+  size = 'small',
+  disabled = false,
+  allowNone = false,
+  noneLabel = 'None',
+  fullWidth = true,
+}) {
+  const normalizedOptions = allowNone ? [{ id: '', name: noneLabel }, ...options] : options;
+  const selected = value
+    ? normalizedOptions.find((option) => String(option.id) === String(value)) || null
+    : null;
+  const selectedLabel = selected ? getOptionLabel(selected) : '';
+  const [inputValue, setInputValue] = useState(selectedLabel);
+  const [isTyping, setIsTyping] = useState(false);
+
+  useEffect(() => {
+    if (selected) {
+      setInputValue(selectedLabel);
+      setIsTyping(false);
+    } else if (!value && !isTyping) {
+      setInputValue('');
+    }
+  }, [isTyping, selected, selectedLabel, value]);
+
+  return (
+    <Autocomplete
+      size={size}
+      options={normalizedOptions}
+      value={selected}
+      inputValue={inputValue}
+      disabled={disabled}
+      fullWidth={fullWidth}
+      autoHighlight
+      clearOnEscape
+      openOnFocus
+      selectOnFocus
+      handleHomeEndKeys
+      isOptionEqualToValue={(option, selectedOption) => String(option.id) === String(selectedOption.id)}
+      getOptionLabel={(option) => getOptionLabel(option)}
+      onChange={(_, option) => {
+        onChange(option?.id || '');
+        setInputValue(option ? getOptionLabel(option) : '');
+        setIsTyping(false);
+      }}
+      onInputChange={(_, newInputValue, reason) => {
+        setInputValue(newInputValue);
+        if (reason === 'clear') {
+          onChange('');
+          setIsTyping(false);
+        }
+        if (reason === 'input' && selected && newInputValue !== selectedLabel) {
+          setIsTyping(true);
+          onChange('');
+        }
+        if (reason === 'input' && !selected) {
+          setIsTyping(true);
+        }
+      }}
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          label={label}
+          placeholder={selected ? placeholder : allowNone ? noneLabel : placeholder}
+          inputProps={{
+            ...params.inputProps,
+            autoComplete: 'new-password',
+          }}
+        />
+      )}
+    />
+  );
+}
 
 export function StatCard({ label, value, sub, accent = command.teal, icon }) {
   return (

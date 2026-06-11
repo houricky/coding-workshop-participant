@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
   Card, CardContent, Table, TableHead, TableBody, TableRow, TableCell, TableContainer,
-  Button, Box, Stack, TextField, MenuItem, IconButton, Tooltip, Alert, Grid, Typography, InputAdornment,
+  Button, Box, Stack, TextField, MenuItem, IconButton, Tooltip, Alert, Grid, Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import { PageHeader, LoadingState, EmptyState, ConfirmDialog } from '../components/ui';
+import { PageHeader, LoadingState, EmptyState, ConfirmDialog, EntityAutocomplete } from '../components/ui';
 import { allocations as allocApi, projects as projectsApi, employees as employeesApi, apiErrorMessage } from '../services/api';
 import { hours, money } from '../utils/format';
 
@@ -29,6 +29,7 @@ export default function ResourceAllocationPage() {
   useEffect(load, []);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const setValue = (k) => (value) => setForm((f) => ({ ...f, [k]: value }));
   const valid = form.project_id && form.employee_id && form.role_on_project && Number(form.allocated_hours) > 0;
 
   const handleAdd = async () => {
@@ -60,18 +61,13 @@ export default function ResourceAllocationPage() {
           <Typography variant="overline" color="text.secondary">Add allocation</Typography>
           <Grid container spacing={2} sx={{ mt: 0 }} alignItems="flex-start">
             <Grid item xs={12} sm={6} md={3}>
-              <TextField select size="small" label="Project" value={form.project_id} onChange={set('project_id')} fullWidth>
-                {projects.map((p) => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
-              </TextField>
+              <EntityAutocomplete label="Project" options={projects} value={form.project_id} onChange={setValue('project_id')} placeholder="Search projects" />
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
-              <TextField select size="small" label="Employee" value={form.employee_id} onChange={set('employee_id')} fullWidth>
-                {employees.map((e) => <MenuItem key={e.id} value={e.id}>{e.name}</MenuItem>)}
-              </TextField>
+              <EntityAutocomplete label="Employee" options={employees} value={form.employee_id} onChange={setValue('employee_id')} placeholder="Search employees" />
             </Grid>
             <Grid item xs={6} sm={4} md={2}>
-              <TextField size="small" label="Hours" type="number" value={form.allocated_hours} onChange={set('allocated_hours')} fullWidth
-                InputProps={{ endAdornment: <InputAdornment position="end">h</InputAdornment> }} />
+              <TextField size="small" label="Hours" type="number" value={form.allocated_hours} onChange={set('allocated_hours')} fullWidth />
             </Grid>
             <Grid item xs={6} sm={4} md={2}>
               <TextField select size="small" label="Role" value={form.role_on_project} onChange={set('role_on_project')} fullWidth>

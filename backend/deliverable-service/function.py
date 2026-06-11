@@ -9,6 +9,8 @@ from postgres_service import (
     create_deliverable,
     delete_deliverable,
     get_deliverable,
+    is_employee_allocated,
+    is_project_lead,
     list_deliverables,
     update_deliverable,
 )
@@ -28,16 +30,17 @@ def handler(event=None, context=None):
         if req["method"] == "OPTIONS":
             return preflight_response()
 
-        if not get_auth_context(req["headers"]):
+        auth = get_auth_context(req["headers"])
+        if not auth:
             return error_response(401, "unauthorized", "Missing or invalid token")
 
         method, path, body, query = req["method"], req["path"], req["body"], req["query"]
 
         if path == "/":
             if method == "GET":
-                return list_all(query)
+                return list_all(query, auth)
             if method == "POST":
-                return create(body)
+                return create(body, auth)
             return error_response(405, "method_not_allowed", f"{method} not allowed")
 
         if path.startswith("/") and len(path) > 1:
@@ -45,11 +48,11 @@ def handler(event=None, context=None):
             if not is_valid_uuid(deliverable_id):
                 return error_response(400, "validation_error", "Invalid deliverable ID")
             if method == "GET":
-                return get_one(deliverable_id)
+                return get_one(deliverable_id, auth)
             if method == "PUT":
-                return update(deliverable_id, body)
+                return update(deliverable_id, body, auth)
             if method == "DELETE":
-                return remove(deliverable_id)
+                return remove(deliverable_id, auth)
             return error_response(405, "method_not_allowed", f"{method} not allowed")
 
         return error_response(404, "not_found", f"No route for {method} {path}")
@@ -60,7 +63,11 @@ def handler(event=None, context=None):
         return error_response(500, "internal_error", str(e))
 
 
-def list_all(query: dict):
+def forbidden():
+    return error_response(403, "forbidden", "You do not have permission to perform this action")
+
+
+def list_all(query: dict, auth: dict):
     project_id = query.get("project_id")
     employee_id = query.get("employee_id")
     status = query.get("status")
@@ -70,11 +77,14 @@ def list_all(query: dict):
         return error_response(400, "validation_error", "Invalid employee_id")
     if status and status not in VALID_STATUSES:
         return error_response(400, "validation_error", "Invalid deliverable status")
-    deliverables = list_deliverables(project_id, employee_id, status)
+    allocated_employee_id = auth.get("employee_id") if auth.get("role") == "employee" else None
+    deliverables = list_deliverables(project_id, employee_id, status, allocated_employee_id)
     return json_response(200, {"deliverables": deliverables, "count": len(deliverables)})
 
 
-def create(body: dict):
+def create(body: dict, auth: dict):
+    if auth.get("role") == "employee":
+        return forbidden()
     body = dict(body or {})
     missing = require_fields(body, ["project_id", "title", "due_date"])
     if missing:
@@ -82,29 +92,64 @@ def create(body: dict):
     validation_error = validate_payload(body, creating=True)
     if validation_error:
         return validation_error
+    if auth.get("role") == "manager" and not is_project_lead(body["project_id"], auth.get("employee_id")):
+        return forbidden()
     deliverable = create_deliverable(body)
     return json_response(201, {"deliverable": deliverable})
 
 
-def get_one(deliverable_id: str):
+def get_one(deliverable_id: str, auth: dict):
     deliverable = get_deliverable(deliverable_id)
     if not deliverable:
         return error_response(404, "not_found", "Deliverable not found")
+    if auth.get("role") == "employee" and not is_employee_allocated(deliverable["project_id"], auth.get("employee_id")):
+        return forbidden()
     return json_response(200, {"deliverable": deliverable})
 
 
-def update(deliverable_id: str, body: dict):
+def update(deliverable_id: str, body: dict, auth: dict):
     body = dict(body or {})
+    existing = get_deliverable(deliverable_id)
+    if not existing:
+        return error_response(404, "not_found", "Deliverable not found")
     validation_error = validate_payload(body, creating=False)
     if validation_error:
         return validation_error
+    if auth.get("role") == "manager" and not is_project_lead(existing["project_id"], auth.get("employee_id")):
+        return forbidden()
+    if auth.get("role") == "employee":
+        employee_id = auth.get("employee_id")
+        if not is_employee_allocated(existing["project_id"], employee_id):
+            return forbidden()
+        assigned_employee_id = existing.get("employee_id") or existing.get("assigned_employee_id")
+        requested_assignee = body.get("employee_id", body.get("assigned_employee_id"))
+        allowed = {"status", "employee_id", "assigned_employee_id"}
+        if set(body) - allowed:
+            return forbidden()
+        if assigned_employee_id == employee_id:
+            if requested_assignee not in (None, "", employee_id):
+                return forbidden()
+            body.pop("employee_id", None)
+            body.pop("assigned_employee_id", None)
+        elif assigned_employee_id in (None, "") and requested_assignee == employee_id:
+            body["assigned_employee_id"] = employee_id
+            body.pop("employee_id", None)
+        else:
+            return forbidden()
     deliverable = update_deliverable(deliverable_id, body)
     if not deliverable:
         return error_response(404, "not_found", "Deliverable not found")
     return json_response(200, {"deliverable": deliverable})
 
 
-def remove(deliverable_id: str):
+def remove(deliverable_id: str, auth: dict):
+    existing = get_deliverable(deliverable_id)
+    if not existing:
+        return error_response(404, "not_found", "Deliverable not found")
+    if auth.get("role") == "employee":
+        return forbidden()
+    if auth.get("role") == "manager" and not is_project_lead(existing["project_id"], auth.get("employee_id")):
+        return forbidden()
     if not delete_deliverable(deliverable_id):
         return error_response(404, "not_found", "Deliverable not found")
     return no_content()

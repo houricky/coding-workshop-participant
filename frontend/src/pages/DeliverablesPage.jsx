@@ -8,8 +8,9 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import { PageHeader, LoadingState, EmptyState, ConfirmDialog } from '../components/ui';
+import { PageHeader, LoadingState, EmptyState, ConfirmDialog, EntityAutocomplete } from '../components/ui';
 import DeliverableFormDialog from '../components/DeliverableFormDialog';
+import { useAuth } from '../context/AuthContext';
 import {
   allocations as allocationsApi,
   deliverables as deliverablesApi,
@@ -39,6 +40,7 @@ export default function DeliverablesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [toEdit, setToEdit] = useState(null);
   const [toDelete, setToDelete] = useState(null);
+  const { user } = useAuth();
 
   const params = useMemo(() => Object.fromEntries(Object.entries(filters).filter(([, value]) => value)), [filters]);
 
@@ -62,6 +64,7 @@ export default function DeliverablesPage() {
   useEffect(load, [params]);
 
   const setFilter = (key) => (event) => setFilters((current) => ({ ...current, [key]: event.target.value }));
+  const setFilterValue = (key) => (value) => setFilters((current) => ({ ...current, [key]: value }));
   const openDialog = (deliverable = null) => {
     setToEdit(deliverable);
     setDialogOpen(true);
@@ -90,6 +93,24 @@ export default function DeliverablesPage() {
       ...allocation.employee,
       project_id: allocation.project_id,
     }));
+  const isAdmin = user?.role === 'admin';
+  const leadProjectIds = new Set([
+    ...projects.filter((project) => project.project_manager_id === user?.employee_id).map((project) => project.id),
+    ...allocations
+      .filter((allocation) => allocation.employee_id === user?.employee_id && allocation.role_on_project === 'manager')
+      .map((allocation) => allocation.project_id),
+  ]);
+  const isProjectLead = (projectId) => isAdmin || (user?.role === 'manager' && leadProjectIds.has(projectId));
+  const canCreateDeliverable = isAdmin || user?.role === 'manager';
+  const canEditDeliverable = (deliverable) => {
+    if (isProjectLead(deliverable.project_id)) return true;
+    if (user?.role !== 'employee') return false;
+    const assignedId = deliverable.employee_id || deliverable.assigned_employee_id;
+    return assignedId === user?.employee_id || !assignedId;
+  };
+  const projectOptions = user?.role === 'manager'
+    ? projects.filter((project) => leadProjectIds.has(project.id))
+    : projects;
 
   if (error && !rows) return <Alert severity="error">{error}</Alert>;
   if (!rows) return <LoadingState label="Loading deliverables" />;
@@ -99,7 +120,7 @@ export default function DeliverablesPage() {
       <PageHeader
         title="Deliverables"
         subtitle="Track discrete project outcomes, owners, dates, and status."
-        action={<Button variant="contained" startIcon={<AddIcon />} onClick={() => openDialog()}>Add deliverable</Button>}
+        action={canCreateDeliverable && <Button variant="contained" startIcon={<AddIcon />} onClick={() => openDialog()}>Add deliverable</Button>}
       />
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -108,16 +129,26 @@ export default function DeliverablesPage() {
         <CardContent>
           <Grid container spacing={2}>
             <Grid item xs={12} md={4}>
-              <TextField select size="small" label="Project" value={filters.project_id} onChange={setFilter('project_id')} fullWidth>
-                <MenuItem value="">All projects</MenuItem>
-                {projects.map((project) => <MenuItem key={project.id} value={project.id}>{project.name}</MenuItem>)}
-              </TextField>
+              <EntityAutocomplete
+                label="Project"
+                options={projects}
+                value={filters.project_id}
+                onChange={setFilterValue('project_id')}
+                placeholder="Search projects"
+                allowNone
+                noneLabel="All projects"
+              />
             </Grid>
             <Grid item xs={12} md={4}>
-              <TextField select size="small" label="Assignee" value={filters.employee_id} onChange={setFilter('employee_id')} fullWidth>
-                <MenuItem value="">All assignees</MenuItem>
-                {employees.map((employee) => <MenuItem key={employee.id} value={employee.id}>{employee.name}</MenuItem>)}
-              </TextField>
+              <EntityAutocomplete
+                label="Assignee"
+                options={employees}
+                value={filters.employee_id}
+                onChange={setFilterValue('employee_id')}
+                placeholder="Search assignees"
+                allowNone
+                noneLabel="All assignees"
+              />
             </Grid>
             <Grid item xs={12} md={4}>
               <TextField select size="small" label="Status" value={filters.status} onChange={setFilter('status')} fullWidth>
@@ -172,16 +203,20 @@ export default function DeliverablesPage() {
                     </TableCell>
                     <TableCell align="right">
                       <Stack direction="row" justifyContent="flex-end">
-                        <Tooltip title="Edit">
-                          <IconButton size="small" onClick={(event) => { event.stopPropagation(); openDialog(deliverable); }}>
-                            <EditOutlinedIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                          <IconButton size="small" onClick={(event) => { event.stopPropagation(); setToDelete(deliverable); }}>
-                            <DeleteOutlineIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        {canEditDeliverable(deliverable) && (
+                          <Tooltip title="Edit">
+                            <IconButton size="small" onClick={(event) => { event.stopPropagation(); openDialog(deliverable); }}>
+                              <EditOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {isProjectLead(deliverable.project_id) && (
+                          <Tooltip title="Delete">
+                            <IconButton size="small" onClick={(event) => { event.stopPropagation(); setToDelete(deliverable); }}>
+                              <DeleteOutlineIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -192,8 +227,8 @@ export default function DeliverablesPage() {
         </Card>
       )}
 
-      <DeliverableFormDialog open={dialogOpen} initial={toEdit} projectOptions={projects}
-        assigneeOptions={assigneeOptions} onClose={closeDialog} onSubmit={saveDeliverable} />
+      <DeliverableFormDialog open={dialogOpen} initial={toEdit} projectOptions={projectOptions}
+        assigneeOptions={assigneeOptions} currentUser={user} onClose={closeDialog} onSubmit={saveDeliverable} />
       <ConfirmDialog open={!!toDelete} title="Delete deliverable?" confirmLabel="Delete"
         message={`Delete ${toDelete?.title || 'this deliverable'}?`}
         onClose={() => setToDelete(null)} onConfirm={confirmDelete} />

@@ -3,6 +3,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField,
   MenuItem, Stack,
 } from '@mui/material';
+import { EntityAutocomplete } from './ui';
 
 const STATUSES = [
   { value: 'pending', label: 'Pending' },
@@ -25,12 +26,16 @@ export default function DeliverableFormDialog({
   projectId,
   projectOptions = [],
   assigneeOptions = [],
+  currentUser,
   onClose,
   onSubmit,
 }) {
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
   const isEdit = !!initial?.id;
+  const isEmployee = currentUser?.role === 'employee';
+  const initialAssigneeId = initial?.employee_id ?? initial?.assigned_employee_id ?? '';
+  const employeeClaimRequired = isEmployee && isEdit && !initialAssigneeId && form.employee_id !== currentUser?.employee_id;
 
   useEffect(() => {
     if (open) {
@@ -43,22 +48,43 @@ export default function DeliverableFormDialog({
   }, [open, initial]);
 
   const set = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
+  const setValue = (key) => (value) => setForm((current) => ({ ...current, [key]: value }));
   const selectedProjectId = projectId || form.project_id || initial?.project_id || '';
-  const filteredAssignees = selectedProjectId
+  const projectAssignees = selectedProjectId
     ? assigneeOptions.filter((employee) => !employee.project_id || employee.project_id === selectedProjectId)
     : [];
+  const selfOption = currentUser?.employee_id
+    ? projectAssignees.find((employee) => employee.id === currentUser.employee_id) || {
+      id: currentUser.employee_id,
+      name: currentUser.name || currentUser.email,
+    }
+    : null;
+  const selectedAssignee = initialAssigneeId
+    ? projectAssignees.find((employee) => employee.id === initialAssigneeId) || initial?.employee
+    : null;
+  const filteredAssignees = isEmployee
+    ? [selectedAssignee || selfOption].filter(Boolean)
+    : projectAssignees;
+  const lockEmployeeFields = isEmployee && isEdit;
+  const lockEmployeeAssignee = isEmployee && isEdit && !!initialAssigneeId;
 
   const handleSubmit = async () => {
     setSaving(true);
     try {
-      await onSubmit({
-        project_id: selectedProjectId,
-        title: form.title,
-        description: form.description,
-        due_date: form.due_date,
-        employee_id: form.employee_id || null,
-        status: form.status,
-      });
+      const payload = lockEmployeeFields
+        ? {
+          employee_id: form.employee_id || null,
+          status: form.status,
+        }
+        : {
+          project_id: selectedProjectId,
+          title: form.title,
+          description: form.description,
+          due_date: form.due_date,
+          employee_id: form.employee_id || null,
+          status: form.status,
+        };
+      await onSubmit(payload);
       onClose();
     } finally {
       setSaving(false);
@@ -71,22 +97,31 @@ export default function DeliverableFormDialog({
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 0.5 }}>
           {!projectId && (
-            <TextField label="Project" select value={form.project_id || ''} onChange={set('project_id')} fullWidth disabled={isEdit}>
-              {projectOptions.map((project) => (
-                <MenuItem key={project.id} value={project.id}>{project.name}</MenuItem>
-              ))}
-            </TextField>
+            <EntityAutocomplete
+              label="Project"
+              options={projectOptions}
+              value={form.project_id}
+              onChange={setValue('project_id')}
+              placeholder="Search projects"
+              size="medium"
+              disabled={isEdit}
+            />
           )}
-          <TextField label="Title" value={form.title} onChange={set('title')} fullWidth autoFocus />
-          <TextField label="Description" value={form.description || ''} onChange={set('description')} fullWidth multiline minRows={3} />
+          <TextField label="Title" value={form.title} onChange={set('title')} fullWidth autoFocus disabled={lockEmployeeFields} />
+          <TextField label="Description" value={form.description || ''} onChange={set('description')} fullWidth multiline minRows={3} disabled={lockEmployeeFields} />
           <TextField label="Due date" type="date" value={form.due_date || ''} onChange={set('due_date')}
-            fullWidth InputLabelProps={{ shrink: true }} />
-          <TextField label="Assigned to" select value={form.employee_id || ''} onChange={set('employee_id')} fullWidth>
-            <MenuItem value="">Unassigned</MenuItem>
-            {filteredAssignees.map((employee) => (
-              <MenuItem key={employee.id} value={employee.id}>{employee.name}</MenuItem>
-            ))}
-          </TextField>
+            fullWidth InputLabelProps={{ shrink: true }} disabled={lockEmployeeFields} />
+          <EntityAutocomplete
+            label="Assigned to"
+            options={filteredAssignees}
+            value={form.employee_id}
+            onChange={setValue('employee_id')}
+            placeholder="Search assignees"
+            size="medium"
+            disabled={lockEmployeeAssignee}
+            allowNone
+            noneLabel="Unassigned"
+          />
           <TextField label="Status" select value={form.status} onChange={set('status')} fullWidth>
             {STATUSES.map((status) => (
               <MenuItem key={status.value} value={status.value}>{status.label}</MenuItem>
@@ -96,7 +131,7 @@ export default function DeliverableFormDialog({
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={handleSubmit} disabled={saving || !selectedProjectId || !form.title || !form.due_date}>
+        <Button variant="contained" onClick={handleSubmit} disabled={saving || !selectedProjectId || !form.title || !form.due_date || employeeClaimRequired}>
           {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Add deliverable'}
         </Button>
       </DialogActions>

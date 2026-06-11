@@ -12,6 +12,7 @@ import { PageHeader, LoadingState, EmptyState, ConfirmDialog } from '../componen
 import RagChip from '../components/RagChip';
 import HealthGauge from '../components/HealthGauge';
 import ProjectFormDialog from '../components/ProjectFormDialog';
+import { useAuth } from '../context/AuthContext';
 import { employees as employeesApi, projects as projectsApi, apiErrorMessage } from '../services/api';
 import { money, hours, percent } from '../utils/format';
 import { ragSortWeight } from '../utils/rag';
@@ -28,6 +29,10 @@ export default function ProjectsListPage() {
   const navigate = useNavigate();
   const theme = useTheme();
   const compact = useMediaQuery(theme.breakpoints.down('md'));
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const isLead = (project) => project?.project_manager_id === user?.employee_id;
+  const canEditProject = (project) => isAdmin || (user?.role === 'manager' && isLead(project));
 
   const load = () => {
     setError('');
@@ -66,11 +71,11 @@ export default function ProjectsListPage() {
       <PageHeader
         title="Projects"
         subtitle="Sorted by urgency — most at-risk first."
-        action={
+        action={isAdmin && (
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setEditing(null); setFormOpen(true); }}>
             New project
           </Button>
-        }
+        )}
       />
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
@@ -86,7 +91,7 @@ export default function ProjectsListPage() {
         <EmptyState
           title={rows.length === 0 ? 'No projects yet' : 'No matches'}
           description={rows.length === 0 ? 'Create your first project to start tracking budget and resource health.' : 'Try a different search or status filter.'}
-          action={rows.length === 0 && (
+          action={rows.length === 0 && isAdmin && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setEditing(null); setFormOpen(true); }}>
               New project
             </Button>
@@ -130,16 +135,20 @@ export default function ProjectsListPage() {
                       </TableCell>
                     )}
                     <TableCell align="right" onClick={(e) => e.stopPropagation()}>
-                      <Tooltip title="Edit">
-                        <IconButton size="small" onClick={() => { setEditing(p); setFormOpen(true); }}>
-                          <EditOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete">
-                        <IconButton size="small" onClick={() => setToDelete(p)}>
-                          <DeleteOutlineIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      {canEditProject(p) && (
+                        <Tooltip title="Edit">
+                          <IconButton size="small" onClick={() => { setEditing(p); setFormOpen(true); }}>
+                            <EditOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {isAdmin && (
+                        <Tooltip title="Delete">
+                          <IconButton size="small" onClick={() => setToDelete(p)}>
+                            <DeleteOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

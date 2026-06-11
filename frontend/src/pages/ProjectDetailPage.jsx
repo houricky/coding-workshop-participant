@@ -14,6 +14,7 @@ import RagChip from '../components/RagChip';
 import HealthGauge from '../components/HealthGauge';
 import ProjectFormDialog from '../components/ProjectFormDialog';
 import DeliverableFormDialog from '../components/DeliverableFormDialog';
+import { useAuth } from '../context/AuthContext';
 import { deliverables as deliverablesApi, employees as employeesApi, projects as projectsApi, apiErrorMessage } from '../services/api';
 import { money, hours, percent, formatDate, initials, clampPercent } from '../utils/format';
 import { ragMeta } from '../theme';
@@ -49,6 +50,7 @@ export default function ProjectDetailPage() {
   const [deliverableOpen, setDeliverableOpen] = useState(false);
   const [deliverableToEdit, setDeliverableToEdit] = useState(null);
   const [deliverableToDelete, setDeliverableToDelete] = useState(null);
+  const { user } = useAuth();
 
   const load = useCallback(() => {
     setError('');
@@ -62,6 +64,21 @@ export default function ProjectDetailPage() {
   if (!p) return <LoadingState label="Loading project" />;
   const managerOptions = employees.filter((e) => e.role === 'manager');
   const deliverableRows = p.deliverables || [];
+  const isAdmin = user?.role === 'admin';
+  const managerLead = user?.role === 'manager' && (
+    p.project_manager_id === user?.employee_id
+    || (p.allocations || []).some((allocation) => (
+      allocation.employee_id === user?.employee_id && allocation.role_on_project === 'manager'
+    ))
+  );
+  const canLeadProject = isAdmin || managerLead;
+  const canManageAllocations = user?.role !== 'employee';
+  const canEditDeliverable = (deliverable) => {
+    if (canLeadProject) return true;
+    if (user?.role !== 'employee') return false;
+    const assignedId = deliverable.employee_id || deliverable.assigned_employee_id;
+    return assignedId === user?.employee_id || !assignedId;
+  };
   const assigneeOptions = (p.allocations || [])
     .map((allocation) => allocation.employee)
     .filter(Boolean)
@@ -97,11 +114,11 @@ export default function ProjectDetailPage() {
       <PageHeader
         title={p.name}
         subtitle={p.description}
-        action={
+        action={canLeadProject && (
           <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={() => setEditOpen(true)}>
             Edit project
           </Button>
-        }
+        )}
       />
 
       <Grid container spacing={2.5}>
@@ -187,7 +204,9 @@ export default function ProjectDetailPage() {
                   ))}
                 </TableBody>
               </Table>
-              <Button size="small" sx={{ mt: 1 }} onClick={() => navigate('/allocations')}>Manage allocations</Button>
+              {canManageAllocations && (
+                <Button size="small" sx={{ mt: 1 }} onClick={() => navigate('/allocations')}>Manage allocations</Button>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -238,9 +257,11 @@ export default function ProjectDetailPage() {
             <CardContent>
               <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={1.5}>
                 <Typography variant="overline" color="text.secondary">Deliverables</Typography>
-                <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => openDeliverableDialog()}>
-                  Add deliverable
-                </Button>
+                {canLeadProject && (
+                  <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => openDeliverableDialog()}>
+                    Add deliverable
+                  </Button>
+                )}
               </Stack>
               <Table size="small" sx={{ mt: 1 }}>
                 <TableHead>
@@ -281,16 +302,20 @@ export default function ProjectDetailPage() {
                           label={deliverableStatusLabel(deliverable.status)} />
                       </TableCell>
                       <TableCell align="right">
-                        <Tooltip title="Edit">
-                          <IconButton size="small" onClick={() => openDeliverableDialog(deliverable)}>
-                            <EditOutlinedIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                          <IconButton size="small" onClick={() => setDeliverableToDelete(deliverable)}>
-                            <DeleteOutlineIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        {canEditDeliverable(deliverable) && (
+                          <Tooltip title="Edit">
+                            <IconButton size="small" onClick={() => openDeliverableDialog(deliverable)}>
+                              <EditOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {canLeadProject && (
+                          <Tooltip title="Delete">
+                            <IconButton size="small" onClick={() => setDeliverableToDelete(deliverable)}>
+                              <DeleteOutlineIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -304,7 +329,7 @@ export default function ProjectDetailPage() {
       <ProjectFormDialog open={editOpen} initial={p} managerOptions={managerOptions} onClose={() => setEditOpen(false)}
         onSubmit={async (payload) => { await projectsApi.update(p.id, payload); load(); }} />
       <DeliverableFormDialog open={deliverableOpen} initial={deliverableToEdit} projectId={p.id}
-        assigneeOptions={assigneeOptions} onClose={closeDeliverableDialog} onSubmit={saveDeliverable} />
+        assigneeOptions={assigneeOptions} currentUser={user} onClose={closeDeliverableDialog} onSubmit={saveDeliverable} />
       <ConfirmDialog open={!!deliverableToDelete} title="Delete deliverable?" confirmLabel="Delete"
         message={`Delete ${deliverableToDelete?.title || 'this deliverable'}?`}
         onClose={() => setDeliverableToDelete(null)} onConfirm={confirmDeleteDeliverable} />

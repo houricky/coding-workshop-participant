@@ -53,11 +53,12 @@ def _jwt_secret() -> str:
     return os.getenv("JWT_SECRET", os.getenv("APP_ID", "acme-dev-secret"))
 
 
-def create_token(user_id: str, role: str, hours: int = 24) -> str:
+def create_token(user_id: str, role: str, employee_id: str | None = None, hours: int = 24) -> str:
     """Create a signed JWT for the given user."""
     payload = {
         "sub": str(user_id),
         "role": role,
+        "employee_id": str(employee_id) if employee_id else None,
         "exp": datetime.now(timezone.utc) + timedelta(hours=hours),
         "iat": datetime.now(timezone.utc),
     }
@@ -81,11 +82,15 @@ def extract_bearer_token(headers: dict) -> str | None:
 
 
 def get_auth_context(headers: dict) -> dict | None:
-    """Return auth context {user_id, role} from Authorization header."""
+    """Return auth context {user_id, role, employee_id} from Authorization header."""
     token = extract_bearer_token(headers)
     if not token:
         return None
     claims = decode_token(token)
     if not claims:
         return None
-    return {"user_id": claims.get("sub"), "role": claims.get("role")}
+    return {
+        "user_id": claims.get("sub"),
+        "role": claims.get("role"),
+        "employee_id": claims.get("employee_id"),
+    }

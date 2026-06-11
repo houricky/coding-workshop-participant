@@ -30,6 +30,8 @@ def handler(event=None, context=None):
             if method == "GET":
                 return list_all(query)
             if method == "POST":
+                if auth.get("role") != "admin":
+                    return forbidden()
                 return create(body)
             return error_response(405, "method_not_allowed", f"{method} not allowed")
 
@@ -40,8 +42,12 @@ def handler(event=None, context=None):
             if method == "GET":
                 return get_one(employee_id)
             if method == "PUT":
+                if auth.get("role") != "admin":
+                    return forbidden()
                 return update(employee_id, body)
             if method == "DELETE":
+                if auth.get("role") != "admin":
+                    return forbidden()
                 return remove(employee_id)
             return error_response(405, "method_not_allowed", f"{method} not allowed")
 
@@ -51,6 +57,10 @@ def handler(event=None, context=None):
     except Exception as e:
         logger.error("Handler error: %s", e)
         return error_response(500, "internal_error", str(e))
+
+
+def forbidden():
+    return error_response(403, "forbidden", "You do not have permission to perform this action")
 
 
 def list_all(query: dict):

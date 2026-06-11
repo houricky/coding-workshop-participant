@@ -62,9 +62,10 @@ const urgencyScore = (project) =>
 
 function ChartTooltip({ active, payload, label, valueFormatter = (v) => v }) {
   if (!active || !payload?.length) return null;
+  const tooltipLabel = payload[0]?.payload?.fullName || label || payload[0]?.name;
   return (
     <Box sx={{ px: 1.25, py: 1, borderRadius: 2, ...glass.panel }}>
-      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>{label ?? payload[0]?.name}</Typography>
+      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>{tooltipLabel}</Typography>
       {payload.map((item) => (
         <Stack key={item.dataKey || item.name} direction="row" spacing={1.5} justifyContent="space-between">
           <Typography variant="caption" color="text.secondary">{item.name}</Typography>
@@ -180,6 +181,70 @@ function RunwayBars({ projects, onProject }) {
   );
 }
 
+function ProjectComparisonChart({ eyebrow, title, note, data, series, valueFormatter, onProject }) {
+  return (
+    <Card sx={{ height: '100%' }}>
+      <CardContent>
+        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1} sx={{ mb: 1.5 }}>
+          <Box>
+            <Typography variant="overline" color="text.secondary">{eyebrow}</Typography>
+            <Typography variant="h6">{title}</Typography>
+          </Box>
+          {note && (
+            <Typography variant="caption" color="text.secondary" className="tnum">
+              {note}
+            </Typography>
+          )}
+        </Stack>
+        <Box sx={{ height: 348 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={data}
+              layout="vertical"
+              onClick={(state) => onProject(state?.activePayload?.[0]?.payload?.id)}
+              margin={{ top: 14, right: 28, left: 10, bottom: 18 }}
+              barGap={3}
+              barCategoryGap={12}
+            >
+              <CartesianGrid stroke={GRID} horizontal={false} />
+              <XAxis
+                type="number"
+                domain={[0, 100]}
+                tickFormatter={(v) => `${Math.round(v)}%`}
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                tick={{ fill: command.muted, fontSize: 12 }}
+              />
+              <YAxis
+                dataKey="name"
+                type="category"
+                tickLine={false}
+                axisLine={false}
+                width={128}
+                tickMargin={10}
+                tick={{ fill: command.muted, fontSize: 12 }}
+              />
+              <RTooltip content={<ChartTooltip valueFormatter={valueFormatter} />} cursor={{ fill: CHART_CURSOR_FILL }} />
+              <Legend verticalAlign="bottom" height={28} />
+              {series.map((item) => (
+                <Bar
+                  key={item.dataKey}
+                  dataKey={item.dataKey}
+                  name={item.name}
+                  fill={item.fill}
+                  radius={[0, 4, 4, 0]}
+                  isAnimationActive={false}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function DashboardPage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -194,16 +259,24 @@ export default function DashboardPage() {
     if (!data) return null;
     const ragBreakdown = data.active_rag_breakdown || data.rag_breakdown || {};
     const rawProjects = Array.isArray(data.project_burn) ? data.project_burn : [];
-    const projectBurn = rawProjects.map((project) => ({
-      ...project,
-      fullName: project.name,
-      name: shortName(project.name, 15),
-      budget_used: safeNumber(project.budget_used),
-      budget_remaining: safeNumber(project.budget_remaining),
-      burn_percent: safeNumber(project.burn_percent),
-      completion_percent: safeNumber(project.completion_percent),
-      progress_gap: safeNumber(project.progress_gap),
-    }));
+    const projectBurn = rawProjects.map((project) => {
+      const budgetUsed = safeNumber(project.budget_used);
+      const budgetRemaining = safeNumber(project.budget_remaining);
+      const budgetUsedPercent = safeNumber(project.budget_used_percent) || pctOf(budgetUsed, budgetUsed + budgetRemaining);
+
+      return {
+        ...project,
+        fullName: project.name,
+        name: shortName(project.name, 15),
+        budget_used: budgetUsed,
+        budget_remaining: budgetRemaining,
+        budget_used_percent: clampPercent(budgetUsedPercent),
+        budget_remaining_percent: clampPercent(100 - budgetUsedPercent),
+        burn_percent: safeNumber(project.burn_percent),
+        completion_percent: safeNumber(project.completion_percent),
+        progress_gap: safeNumber(project.progress_gap),
+      };
+    });
     const relevantProjects = [...projectBurn]
       .sort((a, b) => urgencyScore(b) - urgencyScore(a) || a.fullName.localeCompare(b.fullName))
       .slice(0, 3);
@@ -368,88 +441,38 @@ export default function DashboardPage() {
           </Card>
         </Grid>
 
-        <Grid item xs={12} lg={7}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1} sx={{ mb: 1.5 }}>
-                <Box>
-                  <Typography variant="overline" color="text.secondary">Burn vs completion</Typography>
-                  <Typography variant="h6">Project pressure comparison</Typography>
-                </Box>
-                <Typography variant="caption" color="text.secondary">Click a project row to open it</Typography>
-              </Stack>
-              <Box sx={{ height: 348 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={view.comparisonProjects}
-                    layout="vertical"
-                    onClick={(state) => drillProject(state?.activePayload?.[0]?.payload?.id)}
-                    margin={{ top: 14, right: 28, left: 10, bottom: 18 }}
-                    barGap={3}
-                    barCategoryGap={12}
-                  >
-                    <CartesianGrid stroke={GRID} horizontal={false} />
-                    <XAxis
-                      type="number"
-                      domain={[0, 100]}
-                      tickFormatter={(v) => `${Math.round(v)}%`}
-                      tickLine={false}
-                      axisLine={false}
-                      tickMargin={8}
-                      tick={{ fill: command.muted, fontSize: 12 }}
-                    />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      tickLine={false}
-                      axisLine={false}
-                      width={128}
-                      tickMargin={10}
-                      tick={{ fill: command.muted, fontSize: 12 }}
-                    />
-                    <RTooltip content={<ChartTooltip valueFormatter={(v) => percent(v)} />} cursor={{ fill: CHART_CURSOR_FILL }} />
-                    <Legend verticalAlign="bottom" height={28} />
-                    <Bar dataKey="burn_percent" name="Burn" fill={rag.red.main} radius={[0, 4, 4, 0]} isAnimationActive={false} />
-                    <Bar dataKey="completion_percent" name="Completion" fill={command.teal2} radius={[0, 4, 4, 0]} isAnimationActive={false} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Box>
-            </CardContent>
-          </Card>
+        <Grid item xs={12} lg={6}>
+          <ProjectComparisonChart
+            eyebrow="Burn vs completion"
+            title="Project pressure comparison"
+            note="Click a project row to open it"
+            data={view.comparisonProjects}
+            onProject={drillProject}
+            valueFormatter={(v) => percent(v)}
+            series={[
+              { dataKey: 'burn_percent', name: 'Burn', fill: rag.red.main },
+              { dataKey: 'completion_percent', name: 'Completion', fill: command.teal2 },
+            ]}
+          />
         </Grid>
 
-        <Grid item xs={12} lg={5}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1} sx={{ mb: 2 }}>
-                <Box>
-                  <Typography variant="overline" color="text.secondary">Budget runway</Typography>
-                  <Typography variant="h6">Capital allocation</Typography>
-                </Box>
-                <Typography variant="caption" color="text.secondary" className="tnum">
-                  Remaining {money(data.total_budget_remaining)}
-                </Typography>
-              </Stack>
-              <Box sx={{ height: 326 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={view.topProjects}
-                    layout="vertical"
-                    onClick={(state) => drillProject(state?.activePayload?.[0]?.payload?.id)}
-                    margin={{ top: 6, right: 18, left: 10, bottom: 6 }}
-                  >
-                    <CartesianGrid stroke={GRID} horizontal={false} />
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" width={126} tickLine={false} axisLine={false} />
-                    <RTooltip content={<ChartTooltip valueFormatter={(v) => money(v)} />} cursor={{ fill: CHART_CURSOR_FILL }} />
-                    <Legend />
-                    <Bar dataKey="budget_used" name="Used" stackId="budget" fill={command.teal2} radius={[0, 4, 4, 0]} isAnimationActive={false} />
-                    <Bar dataKey="budget_remaining" name="Remaining" stackId="budget" fill={SUBTLE_FILL} radius={[0, 4, 4, 0]} isAnimationActive={false} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Box>
-            </CardContent>
-          </Card>
+        <Grid item xs={12} lg={6}>
+          <ProjectComparisonChart
+            eyebrow="Budget runway"
+            title="Capital allocation"
+            note={`Remaining ${money(data.total_budget_remaining)}`}
+            data={view.topProjects}
+            onProject={drillProject}
+            valueFormatter={(v, item) => {
+              if (item.dataKey === 'budget_used_percent') return `${percent(v)} (${money(item.payload.budget_used)})`;
+              if (item.dataKey === 'budget_remaining_percent') return `${percent(v)} (${money(item.payload.budget_remaining)})`;
+              return percent(v);
+            }}
+            series={[
+              { dataKey: 'budget_used_percent', name: 'Used', fill: command.teal2 },
+              { dataKey: 'budget_remaining_percent', name: 'Remaining', fill: SUBTLE_FILL },
+            ]}
+          />
         </Grid>
       </Grid>
     </Box>

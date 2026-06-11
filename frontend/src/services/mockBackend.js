@@ -26,7 +26,9 @@ const DELIVERABLE_STATUS_LABELS = {
 // --- Seed data -------------------------------------------------------------
 const db = {
   users: [
-    { id: '1', name: 'ACME Admin', email: 'admin@acme.com', password: 'admin123', role: 'admin' },
+    { id: '1', name: 'ACME Admin', email: 'admin@acme.com', password: 'admin123', role: 'admin', employee_id: 'e1' },
+    { id: '2', name: 'Priya Nair', email: 'priya@acme.test', password: 'admin123', role: 'manager', employee_id: 'e1' },
+    { id: '3', name: 'Marcus Lee', email: 'marcus@acme.test', password: 'admin123', role: 'employee', employee_id: 'e2' },
   ],
   employees: [
     { id: 'e1', name: 'Priya Nair', email: 'priya@acme.test', role: 'manager', staff_type: 'direct', location: 'remote', title: 'Staff Engineer', hourly_rate: 145, capacity_hours: 320 },
@@ -81,6 +83,8 @@ const db = {
     { id: 'dl6', project_id: 'p5', title: 'Access review complete', description: 'Review admin roles and privileged paths.', due_date: '2026-02-12', assigned_employee_id: 'e5', status: 'completed' },
   ],
 };
+
+let currentUserId = null;
 
 // --- Derivation helpers ----------------------------------------------------
 const rateOf = (empId) => db.employees.find((e) => e.id === empId)?.hourly_rate ?? 0;
@@ -181,9 +185,64 @@ function assertDeliverableAssignment(projectId, employeeId) {
   }
 }
 
+function employeeForEmail(email) {
+  return db.employees.find((employee) => employee.email?.toLowerCase() === String(email || '').toLowerCase()) || null;
+}
+
+function publicUser(user) {
+  const employee = user.employee_id ? db.employees.find((e) => e.id === user.employee_id) : employeeForEmail(user.email);
+  return {
+    id: user.id,
+    name: user.name || employee?.name || user.email,
+    email: user.email,
+    role: user.role,
+    employee_id: user.employee_id || employee?.id || null,
+  };
+}
+
+function authUser() {
+  const user = db.users.find((u) => u.id === currentUserId);
+  if (!user) {
+    const err = new Error('Session expired.');
+    err.status = 401;
+    throw err;
+  }
+  return publicUser(user);
+}
+
+function forbidden() {
+  const err = new Error('You do not have permission to perform this action.');
+  err.status = 403;
+  return err;
+}
+
+function isAllocated(projectId, employeeId) {
+  return !!employeeId && db.allocations.some((a) => a.project_id === projectId && a.employee_id === employeeId);
+}
+
+function isProjectLead(projectId, employeeId) {
+  if (!employeeId) return false;
+  const project = db.projects.find((p) => p.id === projectId);
+  return project?.project_manager_id === employeeId
+    || db.allocations.some((a) => a.project_id === projectId && a.employee_id === employeeId && a.role_on_project === 'manager');
+}
+
+function projectIdsForEmployee(employeeId) {
+  return new Set(db.allocations.filter((a) => a.employee_id === employeeId).map((a) => a.project_id));
+}
+
+function assertCanViewProject(projectId, user = authUser()) {
+  if (user.role === 'employee' && !isAllocated(projectId, user.employee_id)) throw forbidden();
+}
+
+function assertCanLeadProject(projectId, user = authUser()) {
+  if (user.role === 'employee') throw forbidden();
+  if (user.role === 'manager' && !isProjectLead(projectId, user.employee_id)) throw forbidden();
+}
+
 // --- Mock API --------------------------------------------------------------
 export const mockBackend = {
-  async register({ name, email, password, role = 'employee' }) {
+  async register({ name, email, password, role = 'employee', employee_id }) {
     await delay();
     if (role === 'admin') {
       const err = new Error('The admin account is managed by the system.');
@@ -200,9 +259,11 @@ export const mockBackend = {
       err.status = 409;
       throw err;
     }
-    const user = { id: uid(), name, email, password, role };
+    const employee = employee_id ? db.employees.find((e) => e.id === employee_id) : employeeForEmail(email);
+    const user = { id: uid(), name: name || employee?.name, email, password, role, employee_id: employee_id || employee?.id || null };
     db.users.push(user);
-    return { token: `mock.${user.id}`, user: { id: user.id, name, email, role } };
+    currentUserId = user.id;
+    return { token: `mock.${user.id}`, user: publicUser(user) };
   },
 
   async login({ email, password }) {
@@ -213,7 +274,8 @@ export const mockBackend = {
       err.status = 401;
       throw err;
     }
-    return { token: `mock.${user.id}`, user: { id: user.id, name: user.name, email, role: user.role } };
+    currentUserId = user.id;
+    return { token: `mock.${user.id}`, user: publicUser(user) };
   },
 
   async me(token) {
@@ -225,7 +287,8 @@ export const mockBackend = {
       err.status = 401;
       throw err;
     }
-    return { id: user.id, name: user.name, email: user.email, role: user.role };
+    currentUserId = user.id;
+    return publicUser(user);
   },
 
   // Employees
@@ -253,12 +316,14 @@ export const mockBackend = {
   },
   async createEmployee(payload) {
     await delay();
+    if (authUser().role !== 'admin') throw forbidden();
     const e = { id: uid(), role: 'employee', staff_type: 'direct', location: 'remote', capacity_hours: 320, hourly_rate: 100, ...payload };
     db.employees.push(e);
     return deriveEmployee(e);
   },
   async updateEmployee(id, payload) {
     await delay();
+    if (authUser().role !== 'admin') throw forbidden();
     const e = db.employees.find((x) => x.id === id);
     if (!e) throw notFound('Employee');
     Object.assign(e, payload);
@@ -266,6 +331,7 @@ export const mockBackend = {
   },
   async deleteEmployee(id) {
     await delay();
+    if (authUser().role !== 'admin') throw forbidden();
     db.employees = db.employees.filter((x) => x.id !== id);
     db.allocations = db.allocations.filter((a) => a.employee_id !== id);
     db.usage = db.usage.filter((u) => u.employee_id !== id);
@@ -276,10 +342,15 @@ export const mockBackend = {
   // Projects
   async listProjects() {
     await delay();
-    return db.projects.map(deriveProject);
+    const user = authUser();
+    const allowedProjectIds = user.role === 'employee' ? projectIdsForEmployee(user.employee_id) : null;
+    return db.projects
+      .filter((p) => !allowedProjectIds || allowedProjectIds.has(p.id))
+      .map(deriveProject);
   },
   async getProject(id) {
     await delay();
+    assertCanViewProject(id);
     const p = db.projects.find((x) => x.id === id);
     if (!p) throw notFound('Project');
     const allocations = db.allocations
@@ -298,6 +369,7 @@ export const mockBackend = {
   },
   async createProject(payload) {
     await delay();
+    if (authUser().role !== 'admin') throw forbidden();
     if (!payload.project_manager_id) {
       const err = new Error('Project manager is required.');
       err.status = 400;
@@ -328,6 +400,7 @@ export const mockBackend = {
   },
   async updateProject(id, payload) {
     await delay();
+    assertCanLeadProject(id);
     const p = db.projects.find((x) => x.id === id);
     if (!p) throw notFound('Project');
     if ('project_manager_id' in payload && !payload.project_manager_id) {
@@ -345,6 +418,7 @@ export const mockBackend = {
   },
   async deleteProject(id) {
     await delay();
+    if (authUser().role !== 'admin') throw forbidden();
     db.projects = db.projects.filter((x) => x.id !== id);
     db.allocations = db.allocations.filter((a) => a.project_id !== id);
     db.usage = db.usage.filter((u) => u.project_id !== id);
@@ -360,14 +434,17 @@ export const mockBackend = {
   // Allocations
   async listAllocations() {
     await delay();
+    const user = authUser();
+    const allowedProjectIds = user.role === 'employee' ? projectIdsForEmployee(user.employee_id) : null;
     return db.allocations.map((a) => ({
       ...a,
       employee: db.employees.find((e) => e.id === a.employee_id),
       project: db.projects.find((p) => p.id === a.project_id),
-    }));
+    })).filter((a) => !allowedProjectIds || allowedProjectIds.has(a.project_id));
   },
   async createAllocation(payload) {
     await delay();
+    assertCanLeadProject(payload.project_id);
     const a = { id: uid(), ...payload, allocated_hours: Number(payload.allocated_hours) };
     db.allocations.push(a);
     return a;
@@ -376,11 +453,15 @@ export const mockBackend = {
     await delay();
     const a = db.allocations.find((x) => x.id === id);
     if (!a) throw notFound('Allocation');
+    assertCanLeadProject(a.project_id);
     Object.assign(a, payload, { allocated_hours: Number(payload.allocated_hours ?? a.allocated_hours) });
     return a;
   },
   async deleteAllocation(id) {
     await delay();
+    const allocation = db.allocations.find((x) => x.id === id);
+    if (!allocation) throw notFound('Allocation');
+    assertCanLeadProject(allocation.project_id);
     db.allocations = db.allocations.filter((x) => x.id !== id);
     return { ok: true };
   },
@@ -416,16 +497,22 @@ export const mockBackend = {
   // Dependencies
   async listDependencies() {
     await delay();
-    return clone(db.dependencies);
+    const user = authUser();
+    const allowedProjectIds = user.role === 'employee' ? projectIdsForEmployee(user.employee_id) : null;
+    return clone(db.dependencies.filter((d) => !allowedProjectIds || allowedProjectIds.has(d.project_id)));
   },
   async createDependency(payload) {
     await delay();
+    assertCanLeadProject(payload.project_id);
     const d = { id: uid(), ...payload };
     db.dependencies.push(d);
     return d;
   },
   async deleteDependency(id) {
     await delay();
+    const dependency = db.dependencies.find((x) => x.id === id);
+    if (!dependency) throw notFound('Dependency');
+    assertCanLeadProject(dependency.project_id);
     db.dependencies = db.dependencies.filter((x) => x.id !== id);
     return { ok: true };
   },
@@ -433,7 +520,10 @@ export const mockBackend = {
   // Deliverables
   async listDeliverables(filters = {}) {
     await delay();
+    const user = authUser();
+    const allowedProjectIds = user.role === 'employee' ? projectIdsForEmployee(user.employee_id) : null;
     return db.deliverables
+      .filter((d) => !allowedProjectIds || allowedProjectIds.has(d.project_id))
       .filter((d) => !filters?.project_id || d.project_id === filters.project_id)
       .filter((d) => !filters?.employee_id || d.assigned_employee_id === filters.employee_id)
       .filter((d) => !filters?.status || d.status === filters.status)
@@ -443,10 +533,12 @@ export const mockBackend = {
     await delay();
     const d = db.deliverables.find((x) => x.id === id);
     if (!d) throw notFound('Deliverable');
+    assertCanViewProject(d.project_id);
     return deriveDeliverable(d);
   },
   async createDeliverable(payload) {
     await delay();
+    assertCanLeadProject(payload.project_id);
     const assignedEmployeeId = payload.employee_id ?? payload.assigned_employee_id ?? null;
     assertDeliverableAssignment(payload.project_id, assignedEmployeeId);
     const d = {
@@ -463,8 +555,24 @@ export const mockBackend = {
   },
   async updateDeliverable(id, payload) {
     await delay();
+    const user = authUser();
     const d = db.deliverables.find((x) => x.id === id);
     if (!d) throw notFound('Deliverable');
+    if (user.role === 'employee') {
+      if (!isAllocated(d.project_id, user.employee_id)) throw forbidden();
+      const allowed = ['status', 'employee_id', 'assigned_employee_id'];
+      if (Object.keys(payload).some((key) => !allowed.includes(key))) throw forbidden();
+      const requestedAssignee = payload.employee_id ?? payload.assigned_employee_id ?? null;
+      if (d.assigned_employee_id === user.employee_id) {
+        if (requestedAssignee && requestedAssignee !== user.employee_id) throw forbidden();
+      } else if (!d.assigned_employee_id && requestedAssignee === user.employee_id) {
+        payload = { ...payload, assigned_employee_id: user.employee_id };
+      } else {
+        throw forbidden();
+      }
+    } else {
+      assertCanLeadProject(d.project_id, user);
+    }
     const hasAssignee = Object.prototype.hasOwnProperty.call(payload, 'employee_id')
       || Object.prototype.hasOwnProperty.call(payload, 'assigned_employee_id');
     const assignedEmployeeId = hasAssignee
@@ -480,6 +588,9 @@ export const mockBackend = {
   },
   async deleteDeliverable(id) {
     await delay();
+    const deliverable = db.deliverables.find((x) => x.id === id);
+    if (!deliverable) throw notFound('Deliverable');
+    assertCanLeadProject(deliverable.project_id);
     db.deliverables = db.deliverables.filter((x) => x.id !== id);
     return { ok: true };
   },
@@ -487,8 +598,15 @@ export const mockBackend = {
   // Dashboard
   async dashboard() {
     await delay();
-    const projects = db.projects.map(deriveProject);
-    const employees = db.employees.map(deriveEmployee);
+    const user = authUser();
+    const allowedProjectIds = user.role === 'employee' ? projectIdsForEmployee(user.employee_id) : null;
+    const scopedProjectRows = db.projects.filter((p) => !allowedProjectIds || allowedProjectIds.has(p.id));
+    const scopedDeliverables = db.deliverables.filter((d) => !allowedProjectIds || allowedProjectIds.has(d.project_id));
+    const scopedEmployeeIds = allowedProjectIds
+      ? new Set(db.allocations.filter((a) => allowedProjectIds.has(a.project_id)).map((a) => a.employee_id))
+      : null;
+    const projects = scopedProjectRows.map(deriveProject);
+    const employees = db.employees.filter((e) => !scopedEmployeeIds || scopedEmployeeIds.has(e.id)).map(deriveEmployee);
     const byStatus = { Green: 0, Amber: 0, Red: 0 };
     const activeByStatus = { Green: 0, Amber: 0, Red: 0 };
     const stageCounts = new Map();
@@ -502,7 +620,7 @@ export const mockBackend = {
     projects.forEach((p) => {
       stageCounts.set(p.stage, (stageCounts.get(p.stage) || 0) + 1);
     });
-    db.deliverables.forEach((d) => {
+    scopedDeliverables.forEach((d) => {
       const label = DELIVERABLE_STATUS_LABELS[d.status] || d.status;
       deliverableStatusCounts.set(label, (deliverableStatusCounts.get(label) || 0) + 1);
     });
@@ -543,9 +661,9 @@ export const mockBackend = {
       total_hours_remaining: Math.max(totalAllocatedHours - totalHoursUsed, 0),
       hours_used_percent: totalAllocatedHours ? (totalHoursUsed / totalAllocatedHours) * 100 : 0,
       overallocated_employees: employees.filter((e) => e.overallocated).length,
-      total_deliverables: db.deliverables.length,
-      completed_deliverables: db.deliverables.filter((d) => d.status === 'completed').length,
-      unassigned_deliverables: db.deliverables.filter((d) => !d.assigned_employee_id).length,
+      total_deliverables: scopedDeliverables.length,
+      completed_deliverables: scopedDeliverables.filter((d) => d.status === 'completed').length,
+      unassigned_deliverables: scopedDeliverables.filter((d) => !d.assigned_employee_id).length,
       at_risk_projects: projects.filter((p) => p.rag_status === 'Red'),
       projects,
     };

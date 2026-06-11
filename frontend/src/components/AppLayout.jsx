@@ -40,9 +40,9 @@ const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: <DashboardOutlinedIcon /> },
   { to: '/projects', label: 'Projects', icon: <FolderOutlinedIcon /> },
   { to: '/deliverables', label: 'Deliverables', icon: <AssignmentOutlinedIcon /> },
-  { to: '/employees', label: 'Employees', icon: <PeopleOutlinedIcon /> },
-  { to: '/allocations', label: 'Resource Allocation', icon: <EventAvailableOutlinedIcon /> },
-  { to: '/usage', label: 'Resource Usage', icon: <TimerOutlinedIcon /> },
+  { to: '/employees', label: 'Employees', icon: <PeopleOutlinedIcon />, allowedRoles: ['admin', 'manager'] },
+  { to: '/allocations', label: 'Resource Allocation', icon: <EventAvailableOutlinedIcon />, allowedRoles: ['admin', 'manager'] },
+  { to: '/usage', label: 'Resource Usage', icon: <TimerOutlinedIcon />, allowedRoles: ['admin', 'manager'] },
 ];
 
 function Brand({ collapsed = false, onClick }) {
@@ -115,13 +115,14 @@ export default function AppLayout() {
   };
 
   const drawerWidth = isDesktop && collapsed ? COLLAPSED_DRAWER_WIDTH : DRAWER_WIDTH;
+  const visibleNavItems = navItems.filter((item) => !item.allowedRoles || item.allowedRoles.includes(user?.role));
 
   const drawerContent = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Brand collapsed={isDesktop && collapsed} onClick={() => { setMobileOpen(false); navigate('/dashboard'); }} />
       <Divider />
       <List sx={{ px: collapsed && isDesktop ? 1 : 1.5, py: 2, flex: 1 }}>
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <Tooltip key={item.to} title={collapsed && isDesktop ? item.label : ''} placement="right">
             <ListItemButton
               component={NavLink}
@@ -186,7 +187,7 @@ export default function AppLayout() {
     </Box>
   );
 
-  const currentTitle = navItems.find((n) => location.pathname.startsWith(n.to))?.label || 'ACME';
+  const currentTitle = visibleNavItems.find((n) => location.pathname.startsWith(n.to))?.label || 'ACME';
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>

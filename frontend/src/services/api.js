@@ -106,7 +106,7 @@ export const auth = {
   login: (body) =>
     USE_MOCK ? mockBackend.login(body) : unwrap(http.post(`${endpoint.auth}/login`, body)),
   me: () =>
-    USE_MOCK ? mockBackend.me(tokenStore.get()) : unwrap(http.get(`${endpoint.auth}/me`)),
+    USE_MOCK ? mockBackend.me(tokenStore.get()) : unwrap(http.get(`${endpoint.auth}/me`), 'user'),
 };
 
 export const employees = {

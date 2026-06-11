@@ -86,66 +86,157 @@ def _team_utilization_row(row: dict) -> dict:
     }
 
 
-def get_portfolio_dashboard() -> dict:
+def _project_scope(alias: str, allocated_employee_id: str | None) -> tuple[str, list]:
+    if not allocated_employee_id:
+        return "", []
+    return (
+        f"""
+        WHERE EXISTS (
+            SELECT 1 FROM project_resource_allocations scope_pra
+            WHERE scope_pra.project_id = {alias}.id
+              AND scope_pra.employee_id = %s
+        )
+        """,
+        [allocated_employee_id],
+    )
+
+
+def _project_summary_scope(alias: str, allocated_employee_id: str | None) -> tuple[str, list]:
+    if not allocated_employee_id:
+        return "", []
+    return (
+        f"""
+        WHERE EXISTS (
+            SELECT 1 FROM project_resource_allocations scope_pra
+            WHERE scope_pra.project_id = {alias}.project_id
+              AND scope_pra.employee_id = %s
+        )
+        """,
+        [allocated_employee_id],
+    )
+
+
+def _deliverable_scope(alias: str, allocated_employee_id: str | None) -> tuple[str, list]:
+    if not allocated_employee_id:
+        return "", []
+    return (
+        f"""
+        WHERE EXISTS (
+            SELECT 1 FROM project_resource_allocations scope_pra
+            WHERE scope_pra.project_id = {alias}.project_id
+              AND scope_pra.employee_id = %s
+        )
+        """,
+        [allocated_employee_id],
+    )
+
+
+def _team_scope(alias: str, allocated_employee_id: str | None) -> tuple[str, list]:
+    if not allocated_employee_id:
+        return "", []
+    return (
+        f"""
+        AND EXISTS (
+            SELECT 1
+            FROM project_resource_allocations viewer_pra
+            JOIN project_resource_allocations member_pra
+              ON member_pra.project_id = viewer_pra.project_id
+            WHERE viewer_pra.employee_id = %s
+              AND member_pra.employee_id = {alias}.employee_id
+        )
+        """,
+        [allocated_employee_id],
+    )
+
+
+def get_portfolio_dashboard(allocated_employee_id: str | None = None) -> dict:
     conn = get_connection()
     with conn.cursor() as cur:
-        cur.execute("SELECT * FROM v_portfolio_dashboard")
-        dashboard = cur.fetchone() or {}
+        project_where, project_params = _project_scope("p", allocated_employee_id)
         cur.execute(
-            """
+            f"""
             SELECT rag_status, COUNT(*) AS count
-            FROM projects
+            FROM projects p
+            {project_where}
             GROUP BY rag_status
             ORDER BY rag_status
-            """
+            """,
+            project_params,
         )
         rag_rows = cur.fetchall()
         cur.execute(
-            """
+            f"""
             SELECT rag_status, COUNT(*) AS count
-            FROM projects
-            WHERE stage = 'active'
+            FROM projects p
+            {project_where + " AND" if project_where else "WHERE"} stage = 'active'
             GROUP BY rag_status
             ORDER BY rag_status
-            """
+            """,
+            project_params,
         )
         active_rag_rows = cur.fetchall()
         cur.execute(
-            """
+            f"""
             SELECT stage, COUNT(*) AS count
-            FROM projects
+            FROM projects p
+            {project_where}
             GROUP BY stage
             ORDER BY stage
-            """
+            """,
+            project_params,
         )
         stage_rows = cur.fetchall()
+        deliverable_where, deliverable_params = _deliverable_scope("pd", allocated_employee_id)
         cur.execute(
-            """
+            f"""
             SELECT status, COUNT(*) AS count
-            FROM project_deliverables
+            FROM project_deliverables pd
+            {deliverable_where}
             GROUP BY status
             ORDER BY status
-            """
+            """,
+            deliverable_params,
         )
         deliverable_status_rows = cur.fetchall()
-        cur.execute("SELECT * FROM v_project_summary ORDER BY rag_progress_gap DESC, name")
+        summary_where, summary_params = _project_summary_scope("vps", allocated_employee_id)
+        cur.execute(
+            f"SELECT * FROM v_project_summary vps {summary_where} ORDER BY rag_progress_gap DESC, name",
+            summary_params,
+        )
         projects = [_project_summary(row) for row in cur.fetchall()]
         cur.execute(
-            """
+            f"""
             SELECT *
-            FROM v_project_summary
+            FROM v_project_summary vps
+            {summary_where}
             ORDER BY GREATEST(budget_used_percent, hours_used_percent) DESC, name
-            """
+            """,
+            summary_params,
         )
         project_chart_rows = [_project_chart_row(row) for row in cur.fetchall()]
+        team_filter, team_params = _team_scope("eas", allocated_employee_id)
         cur.execute(
-            """
+            f"""
             SELECT *
-            FROM v_employee_allocation_summary
+            FROM v_employee_allocation_summary eas
+            WHERE 1 = 1
+            {team_filter}
             ORDER BY allocation_percent DESC, last_name, first_name
-            """
+            """,
+            team_params,
         )
         team_utilization = [_team_utilization_row(row) for row in cur.fetchall()]
+        cur.execute(
+            f"""
+            SELECT COUNT(*) AS total_deliverables,
+                   COUNT(*) FILTER (WHERE status = 'completed') AS completed_deliverables,
+                   COUNT(*) FILTER (WHERE assigned_employee_id IS NULL) AS unassigned_deliverables
+            FROM project_deliverables pd
+            {deliverable_where}
+            """,
+            deliverable_params,
+        )
+        deliverable_totals = cur.fetchone() or {}
 
     rag_breakdown = {"Green": 0, "Amber": 0, "Red": 0}
     for row in rag_rows:
@@ -169,12 +260,12 @@ def get_portfolio_dashboard() -> dict:
             "count": int(row.get("count") or 0),
         })
 
-    active_project_count = int(dashboard.get("active_projects") or 0)
-    total_project_count = int(dashboard.get("total_projects") or 0)
-    total_allocated_budget = float(dashboard.get("total_allocated_budget") or 0)
-    total_budget_used = float(dashboard.get("total_budget_used") or 0)
-    total_allocated_hours = float(dashboard.get("total_allocated_hours") or 0)
-    total_hours_used = float(dashboard.get("total_hours_used") or 0)
+    active_project_count = len([p for p in projects if str(p.get("stage") or "").lower() == "active"])
+    total_project_count = len(projects)
+    total_allocated_budget = sum(float(p.get("allocated_budget") or 0) for p in projects)
+    total_budget_used = sum(float(p.get("budget_used") or 0) for p in projects)
+    total_allocated_hours = sum(float(p.get("allocated_hours") or 0) for p in projects)
+    total_hours_used = sum(float(p.get("hours_used") or 0) for p in projects)
 
     return {
         "project_count": active_project_count,
@@ -194,36 +285,45 @@ def get_portfolio_dashboard() -> dict:
         "total_hours_used": total_hours_used,
         "total_hours_remaining": max(total_allocated_hours - total_hours_used, 0),
         "hours_used_percent": (total_hours_used / total_allocated_hours * 100) if total_allocated_hours else 0,
-        "overallocated_employees": dashboard.get("overallocated_employee_count", 0),
-        "total_deliverables": int(dashboard.get("total_deliverables") or 0),
-        "completed_deliverables": int(dashboard.get("completed_deliverables") or 0),
-        "unassigned_deliverables": int(dashboard.get("unassigned_deliverables") or 0),
+        "overallocated_employees": len([employee for employee in team_utilization if employee.get("overallocated")]),
+        "total_deliverables": int(deliverable_totals.get("total_deliverables") or 0),
+        "completed_deliverables": int(deliverable_totals.get("completed_deliverables") or 0),
+        "unassigned_deliverables": int(deliverable_totals.get("unassigned_deliverables") or 0),
         "at_risk_projects": [p for p in projects if p["rag_status"] == "Red"],
         "projects": projects,
     }
 
 
-def get_overallocations() -> list:
+def get_overallocations(allocated_employee_id: str | None = None) -> list:
     conn = get_connection()
+    team_filter, team_params = _team_scope("eas", allocated_employee_id)
     with conn.cursor() as cur:
         cur.execute(
-            """
-            SELECT * FROM v_employee_allocation_summary
+            f"""
+            SELECT * FROM v_employee_allocation_summary eas
             WHERE is_overallocated = TRUE
+            {team_filter}
             ORDER BY allocation_percent DESC
-            """
+            """,
+            team_params,
         )
         return cur.fetchall()
 
 
-def get_projects_at_risk() -> list:
+def get_projects_at_risk(allocated_employee_id: str | None = None) -> list:
     conn = get_connection()
+    summary_where, summary_params = _project_summary_scope("vps", allocated_employee_id)
+    if summary_where:
+        summary_where += " AND rag_status IN ('amber', 'red')"
+    else:
+        summary_where = "WHERE rag_status IN ('amber', 'red')"
     with conn.cursor() as cur:
         cur.execute(
-            """
-            SELECT * FROM v_project_summary
-            WHERE rag_status IN ('amber', 'red')
+            f"""
+            SELECT * FROM v_project_summary vps
+            {summary_where}
             ORDER BY rag_progress_gap DESC
-            """
+            """,
+            summary_params,
         )
         return [_project_summary(row) for row in cur.fetchall()]

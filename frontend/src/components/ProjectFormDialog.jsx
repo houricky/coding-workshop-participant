@@ -3,6 +3,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField,
   MenuItem, Stack, Grid, Box, Typography, InputAdornment,
 } from '@mui/material';
+import { EntityAutocomplete } from './ui';
 import RagChip from './RagChip';
 import HealthGauge from './HealthGauge';
 import { computeRag } from '../utils/rag';
@@ -22,6 +23,7 @@ export default function ProjectFormDialog({ open, initial, managerOptions = [], 
   }, [open, initial]);
 
   const set = (k, transform = (v) => v) => (e) => setForm((f) => ({ ...f, [k]: transform(e.target.value) }));
+  const setValue = (k) => (value) => setForm((f) => ({ ...f, [k]: value }));
   const num = (v) => (v === '' ? '' : Number(v));
 
   // Live RAG preview uses current derived burn if editing, else completion alone.
@@ -56,9 +58,14 @@ export default function ProjectFormDialog({ open, initial, managerOptions = [], 
           <TextField label="Description" value={form.description} onChange={set('description')} fullWidth multiline minRows={2} />
           <Grid container spacing={2}>
             <Grid item xs={12}>
-              <TextField label="Team lead" select value={form.project_manager_id || ''} onChange={set('project_manager_id')} fullWidth>
-                {managerOptions.map((m) => <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>)}
-              </TextField>
+              <EntityAutocomplete
+                label="Team lead"
+                options={managerOptions}
+                value={form.project_manager_id}
+                onChange={setValue('project_manager_id')}
+                placeholder="Search managers"
+                size="medium"
+              />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField label="Stage" select value={form.stage} onChange={set('stage')} fullWidth>

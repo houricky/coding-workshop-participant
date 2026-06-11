@@ -14,14 +14,69 @@ def project_exists(project_id: str) -> bool:
         return cur.fetchone() is not None
 
 
-def list_budgets(project_id: str | None = None) -> list:
+def is_employee_allocated(project_id: str, employee_id: str | None) -> bool:
+    if not employee_id:
+        return False
     conn = get_connection()
-    if project_id:
-        with conn.cursor() as cur:
-            cur.execute(f"SELECT {BUDGET_COLS} FROM project_budgets WHERE project_id = %s", (project_id,))
-            return cur.fetchall()
     with conn.cursor() as cur:
-        cur.execute(f"SELECT {BUDGET_COLS} FROM project_budgets ORDER BY created_at DESC")
+        cur.execute(
+            """
+            SELECT 1
+            FROM project_resource_allocations
+            WHERE project_id = %s AND employee_id = %s
+            """,
+            (project_id, employee_id),
+        )
+        return cur.fetchone() is not None
+
+
+def is_project_lead(project_id: str, employee_id: str | None) -> bool:
+    if not employee_id:
+        return False
+    conn = get_connection()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM projects p
+            WHERE p.id = %s
+              AND (
+                  p.project_manager_id = %s
+                  OR EXISTS (
+                      SELECT 1
+                      FROM project_resource_allocations pra
+                      WHERE pra.project_id = p.id
+                        AND pra.employee_id = %s
+                        AND pra.role_on_project = 'manager'
+                  )
+              )
+            """,
+            (project_id, employee_id, employee_id),
+        )
+        return cur.fetchone() is not None
+
+
+def list_budgets(project_id: str | None = None, allocated_employee_id: str | None = None) -> list:
+    conn = get_connection()
+    conditions = []
+    params = []
+    if project_id:
+        conditions.append("project_id = %s")
+        params.append(project_id)
+    if allocated_employee_id:
+        conditions.append(
+            """
+            EXISTS (
+                SELECT 1 FROM project_resource_allocations pra
+                WHERE pra.project_id = project_budgets.project_id
+                  AND pra.employee_id = %s
+            )
+            """
+        )
+        params.append(allocated_employee_id)
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT {BUDGET_COLS} FROM project_budgets {where} ORDER BY created_at DESC", params)
         return cur.fetchall()
 
 

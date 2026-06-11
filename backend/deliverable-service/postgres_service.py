@@ -53,7 +53,9 @@ def _select_sql(where: str = "") -> str:
     """
 
 
-def _is_allocated(project_id: str, employee_id: str) -> bool:
+def is_employee_allocated(project_id: str, employee_id: str | None) -> bool:
+    if not employee_id:
+        return False
     conn = get_connection()
     with conn.cursor() as cur:
         cur.execute(
@@ -67,6 +69,32 @@ def _is_allocated(project_id: str, employee_id: str) -> bool:
         return cur.fetchone() is not None
 
 
+def is_project_lead(project_id: str, employee_id: str | None) -> bool:
+    if not employee_id:
+        return False
+    conn = get_connection()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM projects p
+            WHERE p.id = %s
+              AND (
+                  p.project_manager_id = %s
+                  OR EXISTS (
+                      SELECT 1
+                      FROM project_resource_allocations pra
+                      WHERE pra.project_id = p.id
+                        AND pra.employee_id = %s
+                        AND pra.role_on_project = 'manager'
+                  )
+              )
+            """,
+            (project_id, employee_id, employee_id),
+        )
+        return cur.fetchone() is not None
+
+
 def _project_id_for_deliverable(deliverable_id: str) -> str | None:
     conn = get_connection()
     with conn.cursor() as cur:
@@ -76,7 +104,7 @@ def _project_id_for_deliverable(deliverable_id: str) -> str | None:
 
 
 def _validate_assignment(project_id: str, employee_id: str | None):
-    if employee_id and not _is_allocated(project_id, employee_id):
+    if employee_id and not is_employee_allocated(project_id, employee_id):
         raise ValueError("Assigned employee must be allocated to this project")
 
 
@@ -84,6 +112,7 @@ def list_deliverables(
     project_id: str | None = None,
     employee_id: str | None = None,
     status: str | None = None,
+    allocated_employee_id: str | None = None,
 ) -> list:
     conn = get_connection()
     conditions = []
@@ -97,6 +126,17 @@ def list_deliverables(
     if status:
         conditions.append("pd.status = %s")
         params.append(status)
+    if allocated_employee_id:
+        conditions.append(
+            """
+            EXISTS (
+                SELECT 1 FROM project_resource_allocations pra
+                WHERE pra.project_id = pd.project_id
+                  AND pra.employee_id = %s
+            )
+            """
+        )
+        params.append(allocated_employee_id)
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     with conn.cursor() as cur:
         cur.execute(f"{_select_sql(where)} ORDER BY pd.due_date, pd.created_at", params)

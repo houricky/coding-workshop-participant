@@ -110,7 +110,12 @@ def _deliverable(row: dict) -> dict:
     }
 
 
-def list_projects(stage: str | None = None, rag_status: str | None = None, search: str | None = None) -> list:
+def list_projects(
+    stage: str | None = None,
+    rag_status: str | None = None,
+    search: str | None = None,
+    allocated_employee_id: str | None = None,
+) -> list:
     conn = get_connection()
     conditions = []
     params = []
@@ -125,6 +130,17 @@ def list_projects(stage: str | None = None, rag_status: str | None = None, searc
         conditions.append("(name ILIKE %s)")
         pattern = f"%{search}%"
         params.append(pattern)
+    if allocated_employee_id:
+        conditions.append(
+            """
+            EXISTS (
+                SELECT 1 FROM project_resource_allocations pra
+                WHERE pra.project_id = v_project_summary.project_id
+                  AND pra.employee_id = %s
+            )
+            """
+        )
+        params.append(allocated_employee_id)
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     with conn.cursor() as cur:
@@ -223,6 +239,48 @@ def get_project_summary(project_id: str) -> dict | None:
     with conn.cursor() as cur:
         cur.execute("SELECT * FROM v_project_summary WHERE project_id = %s", (project_id,))
         return _project_summary(cur.fetchone())
+
+
+def is_employee_allocated(project_id: str, employee_id: str | None) -> bool:
+    if not employee_id:
+        return False
+    conn = get_connection()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM project_resource_allocations
+            WHERE project_id = %s AND employee_id = %s
+            """,
+            (project_id, employee_id),
+        )
+        return cur.fetchone() is not None
+
+
+def is_project_lead(project_id: str, employee_id: str | None) -> bool:
+    if not employee_id:
+        return False
+    conn = get_connection()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM projects p
+            WHERE p.id = %s
+              AND (
+                  p.project_manager_id = %s
+                  OR EXISTS (
+                      SELECT 1
+                      FROM project_resource_allocations pra
+                      WHERE pra.project_id = p.id
+                        AND pra.employee_id = %s
+                        AND pra.role_on_project = 'manager'
+                  )
+              )
+            """,
+            (project_id, employee_id, employee_id),
+        )
+        return cur.fetchone() is not None
 
 
 def get_employee_role(employee_id: str) -> str | None:

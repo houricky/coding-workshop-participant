@@ -52,7 +52,53 @@ def get_employee_rate(employee_id: str) -> float | None:
         return float(row["hourly_rate"]) if row else None
 
 
-def list_allocations(project_id: str | None = None, employee_id: str | None = None) -> list:
+def is_employee_allocated(project_id: str, employee_id: str | None) -> bool:
+    if not employee_id:
+        return False
+    conn = get_connection()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM project_resource_allocations
+            WHERE project_id = %s AND employee_id = %s
+            """,
+            (project_id, employee_id),
+        )
+        return cur.fetchone() is not None
+
+
+def is_project_lead(project_id: str, employee_id: str | None) -> bool:
+    if not employee_id:
+        return False
+    conn = get_connection()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM projects p
+            WHERE p.id = %s
+              AND (
+                  p.project_manager_id = %s
+                  OR EXISTS (
+                      SELECT 1
+                      FROM project_resource_allocations pra
+                      WHERE pra.project_id = p.id
+                        AND pra.employee_id = %s
+                        AND pra.role_on_project = 'manager'
+                  )
+              )
+            """,
+            (project_id, employee_id, employee_id),
+        )
+        return cur.fetchone() is not None
+
+
+def list_allocations(
+    project_id: str | None = None,
+    employee_id: str | None = None,
+    allocated_employee_id: str | None = None,
+) -> list:
     conn = get_connection()
     conditions = []
     params = []
@@ -62,6 +108,17 @@ def list_allocations(project_id: str | None = None, employee_id: str | None = No
     if employee_id:
         conditions.append("pra.employee_id = %s")
         params.append(employee_id)
+    if allocated_employee_id:
+        conditions.append(
+            """
+            EXISTS (
+                SELECT 1 FROM project_resource_allocations viewer_pra
+                WHERE viewer_pra.project_id = pra.project_id
+                  AND viewer_pra.employee_id = %s
+            )
+            """
+        )
+        params.append(allocated_employee_id)
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
     with conn.cursor() as cur:
         cur.execute(

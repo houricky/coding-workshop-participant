@@ -1,6 +1,6 @@
 # Coding Workshop - Main Guide
 
-> **Main Guide** | [Validation Guide](./validation.md) | [Evaluation Guide](./evaluation.md) | [Testing Guide](./testing.md) | [Implementation Guide](./implementation.md)
+> **Main Guide** | [Validation Guide](./validation.md) | [Evaluation Guide](./evaluation.md) | [Testing Guide](./testing.md) | [Implementation Guide](./implementation.md) | [Seed Data](./seed-data.md)
 
 This folder contains a comprehensive set of documentation to guide you through building a complete web application that meets all specifications and requirements. The goal is to evaluate your effectiveness in delivering a fully working application. Your implementation will be assessed against expected deliverables and milestones.
 
@@ -35,6 +35,7 @@ Before starting, ensure you have:
 2. Review the [Evaluation Guide](./evaluation.md) to understand how your implementation will be assessed and evaluated.
 3. Explore the [Testing Guide](./testing.md) to make sure your implementation doesn't miss important aspects of development lifecycle.
 4. Check the [Implementation Guide](./implementation.md) to get directions and guidelines on implementation expectations.
+5. Use the [Seed Data Reference](./seed-data.md) for local demo login accounts and seeded portfolio scenarios.
 
 ## Navigation Links
 

@@ -32,10 +32,10 @@ export default function App() {
         <Route path="/projects" element={<ProjectsListPage />} />
         <Route path="/projects/:id" element={<ProjectDetailPage />} />
         <Route path="/deliverables" element={<DeliverablesPage />} />
-        <Route path="/employees" element={<EmployeesPage />} />
-        <Route path="/employees/:id" element={<EmployeeDetailPage />} />
-        <Route path="/allocations" element={<ResourceAllocationPage />} />
-        <Route path="/usage" element={<ResourceUsagePage />} />
+        <Route path="/employees" element={<ProtectedRoute allowedRoles={['admin', 'manager']}><EmployeesPage /></ProtectedRoute>} />
+        <Route path="/employees/:id" element={<ProtectedRoute allowedRoles={['admin', 'manager']}><EmployeeDetailPage /></ProtectedRoute>} />
+        <Route path="/allocations" element={<ProtectedRoute allowedRoles={['admin', 'manager']}><ResourceAllocationPage /></ProtectedRoute>} />
+        <Route path="/usage" element={<ProtectedRoute allowedRoles={['admin', 'manager']}><ResourceUsagePage /></ProtectedRoute>} />
       </Route>
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
