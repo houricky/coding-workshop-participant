@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField,
-  MenuItem, Stack,
+  MenuItem, Stack, Autocomplete,
 } from '@mui/material';
 import { EntityAutocomplete } from './ui';
 
@@ -9,6 +9,7 @@ const STATUSES = [
   { value: 'pending', label: 'Pending' },
   { value: 'in_progress', label: 'In progress' },
   { value: 'completed', label: 'Completed' },
+  { value: 'stalled', label: 'Stalled (auto)' },
 ];
 
 const empty = {
@@ -26,11 +27,14 @@ export default function DeliverableFormDialog({
   projectId,
   projectOptions = [],
   assigneeOptions = [],
+  dependencyOptions = [],
+  initialDependencyIds = [],
   currentUser,
   onClose,
   onSubmit,
 }) {
   const [form, setForm] = useState(empty);
+  const [dependsOnIds, setDependsOnIds] = useState([]);
   const [saving, setSaving] = useState(false);
   const isEdit = !!initial?.id;
   const isEmployee = currentUser?.role === 'employee';
@@ -44,8 +48,9 @@ export default function DeliverableFormDialog({
         ...initial,
         employee_id: initial.employee_id ?? initial.assigned_employee_id ?? '',
       } : empty);
+      setDependsOnIds(initial?.id ? initialDependencyIds : []);
     }
-  }, [open, initial]);
+  }, [open, initial, initialDependencyIds]);
 
   const set = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
   const setValue = (key) => (value) => setForm((current) => ({ ...current, [key]: value }));
@@ -84,12 +89,19 @@ export default function DeliverableFormDialog({
           employee_id: form.employee_id || null,
           status: form.status,
         };
-      await onSubmit(payload);
+      await onSubmit(payload, dependsOnIds);
       onClose();
     } finally {
       setSaving(false);
     }
   };
+
+  const availableDependencyOptions = dependencyOptions
+    .filter((option) => option.id !== initial?.id)
+    .sort((a, b) => `${a.project_name} ${a.title}`.localeCompare(`${b.project_name} ${b.title}`));
+  const selectedDependencies = dependsOnIds
+    .map((dependencyId) => availableDependencyOptions.find((option) => option.id === dependencyId))
+    .filter(Boolean);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -124,9 +136,26 @@ export default function DeliverableFormDialog({
           />
           <TextField label="Status" select value={form.status} onChange={set('status')} fullWidth>
             {STATUSES.map((status) => (
-              <MenuItem key={status.value} value={status.value}>{status.label}</MenuItem>
+              <MenuItem key={status.value} value={status.value} disabled={status.value === 'stalled'}>{status.label}</MenuItem>
             ))}
           </TextField>
+          {!lockEmployeeFields && (
+            <Autocomplete
+              multiple
+              options={availableDependencyOptions}
+              value={selectedDependencies}
+              onChange={(_, options) => setDependsOnIds(options.map((option) => option.id))}
+              isOptionEqualToValue={(option, selected) => option.id === selected.id}
+              getOptionLabel={(option) => `${option.project_name}: ${option.title}`}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Depends On Deliverables"
+                  placeholder="Select upstream deliverables"
+                />
+              )}
+            />
+          )}
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>

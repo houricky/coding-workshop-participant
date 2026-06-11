@@ -21,6 +21,7 @@ const DELIVERABLE_STATUS_LABELS = {
   pending: 'Pending',
   in_progress: 'In progress',
   completed: 'Completed',
+  stalled: 'Stalled',
 };
 
 // --- Seed data -------------------------------------------------------------
@@ -79,8 +80,12 @@ const db = {
     { id: 'dl2', project_id: 'p1', title: 'Portal shell implemented', description: 'Responsive authenticated app frame.', due_date: '2026-02-28', assigned_employee_id: 'e4', status: 'in_progress' },
     { id: 'dl3', project_id: 'p1', title: 'UAT checklist', description: '', due_date: '2026-03-20', assigned_employee_id: null, status: 'pending' },
     { id: 'dl4', project_id: 'p2', title: 'Ledger mapping signed off', description: 'Field-level mapping from legacy billing.', due_date: '2026-03-15', assigned_employee_id: 'e3', status: 'in_progress' },
-    { id: 'dl5', project_id: 'p3', title: 'Offline sync prototype', description: 'Conflict handling and sync retry behavior.', due_date: '2026-04-10', assigned_employee_id: 'e4', status: 'pending' },
+    { id: 'dl5', project_id: 'p3', title: 'Offline sync prototype', description: 'Conflict handling and sync retry behavior.', due_date: '2026-04-10', assigned_employee_id: 'e4', status: 'stalled' },
     { id: 'dl6', project_id: 'p5', title: 'Access review complete', description: 'Review admin roles and privileged paths.', due_date: '2026-02-12', assigned_employee_id: 'e5', status: 'completed' },
+  ],
+  deliverableDependencies: [
+    { id: 'dd1', deliverable_id: 'dl5', depends_on_deliverable_id: 'dl2' },
+    { id: 'dd2', deliverable_id: 'dl4', depends_on_deliverable_id: 'dl2' },
   ],
 };
 
@@ -106,13 +111,19 @@ function deriveProject(p) {
     actual_completion_percent: p.actual_completion_percent,
   };
   const r = computeRag(ragInput);
+  const hasStalledDeliverables = deliverables.some((item) => item.status === 'stalled');
+  let ragStatus = r.status;
+  if (hasStalledDeliverables) {
+    if (ragStatus === 'Green') ragStatus = 'Amber';
+    else if (ragStatus === 'Amber') ragStatus = 'Red';
+  }
   return {
     ...p,
     allocated_hours,
     allocated_cost,
     hours_used,
     budget_used,
-    rag_status: r.status,
+    rag_status: ragStatus,
     progress_gap: Number(r.progressGap.toFixed(1)),
     burn_percent: Number(r.burn.toFixed(1)),
     budget_used_percent: Number(r.budgetUsedPercent.toFixed(1)),
@@ -147,11 +158,107 @@ function deriveDeliverable(d) {
     ? db.employees.find((e) => e.id === d.assigned_employee_id) || null
     : null;
   const project = db.projects.find((p) => p.id === d.project_id) || null;
+  const blockedBy = db.deliverableDependencies.filter((dep) => dep.deliverable_id === d.id);
+  const blocks = db.deliverableDependencies.filter((dep) => dep.depends_on_deliverable_id === d.id);
+  const blockedProjectCount = new Set(
+    blocks
+      .map((dep) => db.deliverables.find((candidate) => candidate.id === dep.deliverable_id))
+      .filter(Boolean)
+      .map((candidate) => candidate.project_id)
+      .filter((projectId) => projectId !== d.project_id),
+  ).size;
   return {
     ...d,
     employee_id: d.assigned_employee_id,
+    blocked_by_count: blockedBy.length,
+    blocks_count: blocks.length,
+    blocked_project_count: blockedProjectCount,
     employee,
     project: project ? { id: project.id, name: project.name, stage: project.stage } : null,
+  };
+}
+
+function hasDeliverableCycle(deliverableId, dependsOnDeliverableId, excludeId = null) {
+  const stack = [dependsOnDeliverableId];
+  const seen = new Set();
+
+  while (stack.length) {
+    const node = stack.pop();
+    if (node === deliverableId) return true;
+    if (seen.has(node)) continue;
+    seen.add(node);
+
+    db.deliverableDependencies
+      .filter((dep) => dep.deliverable_id === node && dep.id !== excludeId)
+      .forEach((dep) => stack.push(dep.depends_on_deliverable_id));
+  }
+
+  return false;
+}
+
+function isDeliverableBlocked(deliverableId) {
+  const blockedBy = db.deliverableDependencies.filter((dep) => dep.deliverable_id === deliverableId);
+  return blockedBy.some((dep) => {
+    const upstream = db.deliverables.find((candidate) => candidate.id === dep.depends_on_deliverable_id);
+    return upstream && upstream.status !== 'completed';
+  });
+}
+
+function recalculateDeliverableStatus(deliverableId) {
+  const deliverable = db.deliverables.find((item) => item.id === deliverableId);
+  if (!deliverable || deliverable.status === 'completed') return;
+
+  if (isDeliverableBlocked(deliverableId)) {
+    deliverable.status = 'stalled';
+    return;
+  }
+
+  if (deliverable.status === 'stalled') {
+    deliverable.status = 'in_progress';
+  }
+}
+
+function recalculateImpactedDeliverables(rootDeliverableId) {
+  const queue = [rootDeliverableId];
+  const seen = new Set();
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (seen.has(current)) continue;
+    seen.add(current);
+
+    const downstream = db.deliverableDependencies
+      .filter((dep) => dep.depends_on_deliverable_id === current)
+      .map((dep) => dep.deliverable_id);
+
+    downstream.forEach((deliverableId) => {
+      recalculateDeliverableStatus(deliverableId);
+      queue.push(deliverableId);
+    });
+  }
+}
+
+function deriveDeliverableDependency(dep) {
+  const downstream = db.deliverables.find((d) => d.id === dep.deliverable_id);
+  const upstream = db.deliverables.find((d) => d.id === dep.depends_on_deliverable_id);
+  const downstreamProject = downstream ? db.projects.find((project) => project.id === downstream.project_id) : null;
+  const upstreamProject = upstream ? db.projects.find((project) => project.id === upstream.project_id) : null;
+
+  return {
+    ...clone(dep),
+    deliverable: downstream ? {
+      id: downstream.id,
+      title: downstream.title,
+      project_id: downstream.project_id,
+      project: downstreamProject ? { id: downstreamProject.id, name: downstreamProject.name, stage: downstreamProject.stage } : null,
+    } : null,
+    depends_on: upstream ? {
+      id: upstream.id,
+      title: upstream.title,
+      status: upstream.status,
+      project_id: upstream.project_id,
+      project: upstreamProject ? { id: upstreamProject.id, name: upstreamProject.name, stage: upstreamProject.stage } : null,
+    } : null,
   };
 }
 
@@ -423,7 +530,11 @@ export const mockBackend = {
     db.allocations = db.allocations.filter((a) => a.project_id !== id);
     db.usage = db.usage.filter((u) => u.project_id !== id);
     db.dependencies = db.dependencies.filter((d) => d.project_id !== id && d.depends_on_project_id !== id);
+    const removedDeliverableIds = new Set(db.deliverables.filter((d) => d.project_id === id).map((d) => d.id));
     db.deliverables = db.deliverables.filter((d) => d.project_id !== id);
+    db.deliverableDependencies = db.deliverableDependencies.filter(
+      (dep) => !removedDeliverableIds.has(dep.deliverable_id) && !removedDeliverableIds.has(dep.depends_on_deliverable_id),
+    );
     return { ok: true };
   },
   async projectSummary(id) {
@@ -517,6 +628,111 @@ export const mockBackend = {
     return { ok: true };
   },
 
+  // Deliverable dependencies
+  async listDeliverableDependencies(filters = {}) {
+    await delay();
+    const user = authUser();
+    const allowedProjectIds = user.role === 'employee' ? projectIdsForEmployee(user.employee_id) : null;
+    return db.deliverableDependencies
+      .filter((dep) => {
+        const downstream = db.deliverables.find((d) => d.id === dep.deliverable_id);
+        return !allowedProjectIds || (downstream && allowedProjectIds.has(downstream.project_id));
+      })
+      .filter((dep) => !filters?.deliverable_id || dep.deliverable_id === filters.deliverable_id || dep.depends_on_deliverable_id === filters.deliverable_id)
+      .filter((dep) => {
+        if (!filters?.project_id) return true;
+        const downstream = db.deliverables.find((d) => d.id === dep.deliverable_id);
+        return downstream?.project_id === filters.project_id;
+      })
+      .map((dep) => deriveDeliverableDependency(dep));
+  },
+  async getDeliverableDependency(id) {
+    await delay();
+    const dep = db.deliverableDependencies.find((item) => item.id === id);
+    if (!dep) throw notFound('Dependency');
+    const downstream = db.deliverables.find((d) => d.id === dep.deliverable_id);
+    const upstream = db.deliverables.find((d) => d.id === dep.depends_on_deliverable_id);
+    if (!downstream || !upstream) throw notFound('Dependency');
+    assertCanViewProject(downstream.project_id);
+    return deriveDeliverableDependency(dep);
+  },
+  async createDeliverableDependency(payload) {
+    await delay();
+    const downstream = db.deliverables.find((d) => d.id === payload.deliverable_id);
+    const upstream = db.deliverables.find((d) => d.id === payload.depends_on_deliverable_id);
+    if (!downstream || !upstream) throw notFound('Deliverable');
+    assertCanLeadProject(downstream.project_id);
+    if (downstream.id === upstream.id) {
+      const err = new Error('A deliverable cannot depend on itself.');
+      err.status = 400;
+      throw err;
+    }
+    if (db.deliverableDependencies.some(
+      (dep) => dep.deliverable_id === downstream.id && dep.depends_on_deliverable_id === upstream.id,
+    )) {
+      const err = new Error('Dependency already exists.');
+      err.status = 409;
+      throw err;
+    }
+    if (hasDeliverableCycle(downstream.id, upstream.id)) {
+      const err = new Error('Circular deliverable dependency detected.');
+      err.status = 400;
+      throw err;
+    }
+    const dep = { id: uid(), deliverable_id: downstream.id, depends_on_deliverable_id: upstream.id };
+    db.deliverableDependencies.push(dep);
+    recalculateDeliverableStatus(downstream.id);
+    recalculateImpactedDeliverables(downstream.id);
+    return this.getDeliverableDependency(dep.id);
+  },
+  async updateDeliverableDependency(id, payload) {
+    await delay();
+    const dep = db.deliverableDependencies.find((item) => item.id === id);
+    if (!dep) throw notFound('Dependency');
+    const nextDeliverableId = payload.deliverable_id || dep.deliverable_id;
+    const nextDependsOnId = payload.depends_on_deliverable_id || dep.depends_on_deliverable_id;
+    const downstream = db.deliverables.find((d) => d.id === nextDeliverableId);
+    const upstream = db.deliverables.find((d) => d.id === nextDependsOnId);
+    if (!downstream || !upstream) throw notFound('Deliverable');
+    assertCanLeadProject(downstream.project_id);
+    if (nextDeliverableId === nextDependsOnId) {
+      const err = new Error('A deliverable cannot depend on itself.');
+      err.status = 400;
+      throw err;
+    }
+    if (db.deliverableDependencies.some(
+      (item) => item.id !== id
+        && item.deliverable_id === nextDeliverableId
+        && item.depends_on_deliverable_id === nextDependsOnId,
+    )) {
+      const err = new Error('Dependency already exists.');
+      err.status = 409;
+      throw err;
+    }
+    if (hasDeliverableCycle(nextDeliverableId, nextDependsOnId, id)) {
+      const err = new Error('Circular deliverable dependency detected.');
+      err.status = 400;
+      throw err;
+    }
+    dep.deliverable_id = nextDeliverableId;
+    dep.depends_on_deliverable_id = nextDependsOnId;
+    recalculateDeliverableStatus(dep.deliverable_id);
+    recalculateImpactedDeliverables(dep.deliverable_id);
+    return this.getDeliverableDependency(dep.id);
+  },
+  async deleteDeliverableDependency(id) {
+    await delay();
+    const dep = db.deliverableDependencies.find((item) => item.id === id);
+    if (!dep) throw notFound('Dependency');
+    const downstream = db.deliverables.find((d) => d.id === dep.deliverable_id);
+    if (!downstream) throw notFound('Deliverable');
+    assertCanLeadProject(downstream.project_id);
+    db.deliverableDependencies = db.deliverableDependencies.filter((item) => item.id !== id);
+    recalculateDeliverableStatus(dep.deliverable_id);
+    recalculateImpactedDeliverables(dep.deliverable_id);
+    return { ok: true };
+  },
+
   // Deliverables
   async listDeliverables(filters = {}) {
     await delay();
@@ -539,6 +755,11 @@ export const mockBackend = {
   async createDeliverable(payload) {
     await delay();
     assertCanLeadProject(payload.project_id);
+    if (payload.status === 'stalled') {
+      const err = new Error('status=stalled is system-managed.');
+      err.status = 400;
+      throw err;
+    }
     const assignedEmployeeId = payload.employee_id ?? payload.assigned_employee_id ?? null;
     assertDeliverableAssignment(payload.project_id, assignedEmployeeId);
     const d = {
@@ -551,6 +772,7 @@ export const mockBackend = {
       status: payload.status || 'pending',
     };
     db.deliverables.push(d);
+    recalculateDeliverableStatus(d.id);
     return deriveDeliverable(d);
   },
   async updateDeliverable(id, payload) {
@@ -575,6 +797,11 @@ export const mockBackend = {
     }
     const hasAssignee = Object.prototype.hasOwnProperty.call(payload, 'employee_id')
       || Object.prototype.hasOwnProperty.call(payload, 'assigned_employee_id');
+    if (payload.status === 'stalled') {
+      const err = new Error('status=stalled is system-managed.');
+      err.status = 400;
+      throw err;
+    }
     const assignedEmployeeId = hasAssignee
       ? payload.employee_id ?? payload.assigned_employee_id ?? null
       : d.assigned_employee_id;
@@ -584,6 +811,7 @@ export const mockBackend = {
       status: payload.status || d.status,
     });
     delete d.employee_id;
+    recalculateImpactedDeliverables(d.id);
     return deriveDeliverable(d);
   },
   async deleteDeliverable(id) {
@@ -592,6 +820,10 @@ export const mockBackend = {
     if (!deliverable) throw notFound('Deliverable');
     assertCanLeadProject(deliverable.project_id);
     db.deliverables = db.deliverables.filter((x) => x.id !== id);
+    db.deliverableDependencies = db.deliverableDependencies.filter(
+      (dep) => dep.deliverable_id !== id && dep.depends_on_deliverable_id !== id,
+    );
+    recalculateImpactedDeliverables(id);
     return { ok: true };
   },
 
@@ -624,6 +856,47 @@ export const mockBackend = {
       const label = DELIVERABLE_STATUS_LABELS[d.status] || d.status;
       deliverableStatusCounts.set(label, (deliverableStatusCounts.get(label) || 0) + 1);
     });
+    const stalledBlockerMap = new Map();
+    db.deliverableDependencies.forEach((dep) => {
+      const upstream = scopedDeliverables.find((item) => item.id === dep.depends_on_deliverable_id);
+      const downstream = scopedDeliverables.find((item) => item.id === dep.deliverable_id);
+      if (!upstream || !downstream) return;
+      if (upstream.project_id === downstream.project_id) return;
+      if (downstream.status !== 'stalled') return;
+      if (!['pending', 'in_progress', 'stalled'].includes(upstream.status)) return;
+      const key = upstream.id;
+      if (!stalledBlockerMap.has(key)) {
+        stalledBlockerMap.set(key, {
+          deliverable_id: upstream.id,
+          title: upstream.title,
+          project_id: upstream.project_id,
+          project_name: db.projects.find((project) => project.id === upstream.project_id)?.name,
+          status: DELIVERABLE_STATUS_LABELS[upstream.status] || upstream.status,
+          stalled_downstream_count: 0,
+          stalled_downstream_project_ids: new Set(),
+        });
+      }
+      const item = stalledBlockerMap.get(key);
+      item.stalled_downstream_count += 1;
+      item.stalled_downstream_project_ids.add(downstream.project_id);
+    });
+
+    const stalledBlockers = Array.from(stalledBlockerMap.values()).map((item) => ({
+      deliverable_id: item.deliverable_id,
+      title: item.title,
+      project_id: item.project_id,
+      project_name: item.project_name,
+      status: item.status,
+      stalled_downstream_count: item.stalled_downstream_count,
+      stalled_downstream_project_count: item.stalled_downstream_project_ids.size,
+    }));
+    const stalledBlockingProjectCount = new Set(
+      stalledBlockers.flatMap((item) => db.deliverableDependencies
+        .filter((dep) => dep.depends_on_deliverable_id === item.deliverable_id)
+        .map((dep) => scopedDeliverables.find((deliverable) => deliverable.id === dep.deliverable_id))
+        .filter((deliverable) => deliverable && deliverable.status === 'stalled' && deliverable.project_id !== item.project_id)
+        .map((deliverable) => deliverable.project_id)),
+    ).size;
     const totalAllocatedBudget = projects.reduce((s, p) => s + p.allocated_budget, 0);
     const totalBudgetUsed = projects.reduce((s, p) => s + p.budget_used, 0);
     const totalAllocatedHours = projects.reduce((s, p) => s + p.allocated_hours, 0);
@@ -663,7 +936,11 @@ export const mockBackend = {
       overallocated_employees: employees.filter((e) => e.overallocated).length,
       total_deliverables: scopedDeliverables.length,
       completed_deliverables: scopedDeliverables.filter((d) => d.status === 'completed').length,
+      stalled_deliverables: scopedDeliverables.filter((d) => d.status === 'stalled').length,
       unassigned_deliverables: scopedDeliverables.filter((d) => !d.assigned_employee_id).length,
+      stalling_deliverables_count: stalledBlockers.length,
+      stalled_blocking_project_count: stalledBlockingProjectCount,
+      stalled_blockers: stalledBlockers,
       at_risk_projects: projects.filter((p) => p.rag_status === 'Red'),
       projects,
     };

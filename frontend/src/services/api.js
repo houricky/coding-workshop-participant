@@ -152,6 +152,11 @@ export const deliverables = {
   create: (b) => (USE_MOCK ? mockBackend.createDeliverable(b) : unwrap(http.post(endpoint.deliverables, b), 'deliverable')),
   update: (id, b) => (USE_MOCK ? mockBackend.updateDeliverable(id, b) : unwrap(http.put(`${endpoint.deliverables}/${id}`, b), 'deliverable')),
   remove: (id) => (USE_MOCK ? mockBackend.deleteDeliverable(id) : unwrap(http.delete(`${endpoint.deliverables}/${id}`))),
+  listDependencies: (params) => (USE_MOCK ? mockBackend.listDeliverableDependencies(params) : unwrap(http.get(`${endpoint.deliverables}/dependencies`, query(params)), 'dependencies')),
+  getDependency: (id) => (USE_MOCK ? mockBackend.getDeliverableDependency(id) : unwrap(http.get(`${endpoint.deliverables}/dependencies/${id}`), 'dependency')),
+  createDependency: (b) => (USE_MOCK ? mockBackend.createDeliverableDependency(b) : unwrap(http.post(`${endpoint.deliverables}/dependencies`, b), 'dependency')),
+  updateDependency: (id, b) => (USE_MOCK ? mockBackend.updateDeliverableDependency(id, b) : unwrap(http.put(`${endpoint.deliverables}/dependencies/${id}`, b), 'dependency')),
+  removeDependency: (id) => (USE_MOCK ? mockBackend.deleteDeliverableDependency(id) : unwrap(http.delete(`${endpoint.deliverables}/dependencies/${id}`))),
 };
 
 export const dashboard = {

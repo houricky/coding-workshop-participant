@@ -15,6 +15,7 @@ import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import PeopleOutlinedIcon from '@mui/icons-material/PeopleOutlined';
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
+import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import {
   Bar,
   BarChart,
@@ -88,20 +89,20 @@ function KpiCard({ label, value, sub, icon, onClick }) {
         '&:hover': onClick ? { borderColor: 'rgba(125,211,252,0.28)', bgcolor: 'rgba(18,29,51,0.82)' } : undefined,
       }}
     >
-      <CardContent>
+      <CardContent sx={{ py: 1.5, px: 1.5, '&:last-child': { pb: 1.5 } }}>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
           <Box>
-            <Typography variant="overline" color="text.secondary">{label}</Typography>
-            <Typography variant="h5" className="tnum" sx={{ mt: 0.5, color: 'text.primary' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>{label}</Typography>
+            <Typography variant="h6" className="tnum" sx={{ mt: 0.25, color: 'text.primary', fontSize: '1.1rem' }}>
               {value}
             </Typography>
           </Box>
-          <Box sx={{ width: 36, height: 36, borderRadius: 2, display: 'grid', placeItems: 'center', color: command.teal2, ...glass.inset }}>
+          <Box sx={{ width: 32, height: 32, borderRadius: 1.5, display: 'grid', placeItems: 'center', color: command.teal2, ...glass.inset, fontSize: '1rem' }}>
             {icon}
           </Box>
         </Stack>
         {sub && (
-          <Typography variant="body2" color="text.secondary" className="tnum" sx={{ mt: 1 }}>
+          <Typography variant="caption" color="text.secondary" className="tnum" sx={{ mt: 0.5, display: 'block', fontSize: '0.75rem' }}>
             {sub}
           </Typography>
         )}
@@ -111,18 +112,18 @@ function KpiCard({ label, value, sub, icon, onClick }) {
 }
 
 function TeamRing({ member, onClick }) {
-  const size = 54;
-  const stroke = 4;
+  const size = 48;
+  const stroke = 3;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const pct = clampPercent(member.utilization_percent);
   const color = member.overallocated ? rag.red.main : pct > 85 ? rag.amber.main : command.teal2;
   return (
     <Stack
-      spacing={0.75}
+      spacing={0.4}
       alignItems="center"
       onClick={onClick}
-      sx={{ cursor: 'pointer', minWidth: 80 }}
+      sx={{ cursor: 'pointer', minWidth: 70 }}
     >
       <Box sx={{ position: 'relative', width: size, height: size }}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
@@ -140,19 +141,19 @@ function TeamRing({ member, onClick }) {
             transform={`rotate(-90 ${size / 2} ${size / 2})`}
           />
         </svg>
-        <Avatar sx={{ position: 'absolute', inset: 7, width: 40, height: 40, fontSize: 13 }}>
+        <Avatar sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 36, height: 36, fontSize: 12 }}>
           {initials(member.name)}
         </Avatar>
       </Box>
-      <Typography variant="caption" sx={{ maxWidth: 80, textAlign: 'center' }} noWrap>{member.name}</Typography>
-      <Typography variant="caption" className="tnum" color="text.secondary">{percent(pct)}</Typography>
+      <Typography variant="caption" sx={{ maxWidth: 70, textAlign: 'center', fontSize: '0.7rem' }} noWrap>{member.name}</Typography>
+      <Typography variant="caption" className="tnum" color="text.secondary" sx={{ fontSize: '0.65rem' }}>{percent(pct)}</Typography>
     </Stack>
   );
 }
 
 function RunwayBars({ projects, onProject }) {
   return (
-    <Stack spacing={1.5}>
+    <Stack spacing={1}>
       {projects.map((p) => {
         const burn = clampPercent(p.burn_percent);
         const done = clampPercent(p.completion_percent);
@@ -163,14 +164,14 @@ function RunwayBars({ projects, onProject }) {
             onClick={() => onProject(p.id)}
             sx={{ cursor: 'pointer', '&:hover .runway-track': { borderColor: 'rgba(125,211,252,0.28)' } }}
           >
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.75 }}>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.5 }}>
+              <Stack direction="row" spacing={0.75} alignItems="center" sx={{ minWidth: 0 }}>
                 <RagChip status={p.rag_status} />
-                <Typography variant="body2" noWrap>{p.fullName}</Typography>
+                <Typography variant="body2" noWrap sx={{ fontSize: '0.875rem' }}>{p.fullName}</Typography>
               </Stack>
-              <Typography variant="caption" className="tnum" color="text.secondary">{percent(burn)} burn</Typography>
+              <Typography variant="caption" className="tnum" color="text.secondary" sx={{ fontSize: '0.75rem' }}>{percent(burn)} burn</Typography>
             </Stack>
-            <Box className="runway-track" sx={{ position: 'relative', height: 10, borderRadius: 5, bgcolor: 'rgba(148,163,184,0.10)', border: '1px solid rgba(148,163,184,0.12)', overflow: 'hidden' }}>
+            <Box className="runway-track" sx={{ position: 'relative', height: 8, borderRadius: 5, bgcolor: 'rgba(148,163,184,0.10)', border: '1px solid rgba(148,163,184,0.12)', overflow: 'hidden' }}>
               <Box sx={{ position: 'absolute', inset: 0, width: `${burn}%`, bgcolor: color, opacity: 0.82 }} />
               <Box sx={{ position: 'absolute', top: -3, bottom: -3, left: `calc(${done}% - 1px)`, width: 2, bgcolor: 'rgba(229,238,249,0.9)' }} />
             </Box>
@@ -184,27 +185,27 @@ function RunwayBars({ projects, onProject }) {
 function ProjectComparisonChart({ eyebrow, title, note, data, series, valueFormatter, onProject }) {
   return (
     <Card sx={{ height: '100%' }}>
-      <CardContent>
-        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1} sx={{ mb: 1.5 }}>
+      <CardContent sx={{ py: 1.5, px: 1.5, '&:last-child': { pb: 1.5 } }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" spacing={1} sx={{ mb: 1 }}>
           <Box>
-            <Typography variant="overline" color="text.secondary">{eyebrow}</Typography>
-            <Typography variant="h6">{title}</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>{eyebrow}</Typography>
+            <Typography variant="h6" sx={{ fontSize: '1rem' }}>{title}</Typography>
           </Box>
           {note && (
-            <Typography variant="caption" color="text.secondary" className="tnum">
+            <Typography variant="caption" color="text.secondary" className="tnum" sx={{ fontSize: '0.75rem' }}>
               {note}
             </Typography>
           )}
         </Stack>
-        <Box sx={{ height: 348 }}>
+        <Box sx={{ height: 200 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={data}
               layout="vertical"
               onClick={(state) => onProject(state?.activePayload?.[0]?.payload?.id)}
-              margin={{ top: 14, right: 28, left: 10, bottom: 18 }}
-              barGap={3}
-              barCategoryGap={12}
+              margin={{ top: 8, right: 20, left: 10, bottom: 12 }}
+              barGap={2}
+              barCategoryGap={8}
             >
               <CartesianGrid stroke={GRID} horizontal={false} />
               <XAxis
@@ -287,6 +288,7 @@ export default function DashboardPage() {
     const utilizationAvg = teamUtilization.length
       ? teamUtilization.reduce((sum, e) => sum + safeNumber(e.utilization_percent), 0) / teamUtilization.length
       : 0;
+    const stalledBlockers = Array.isArray(data.stalled_blockers) ? data.stalled_blockers : [];
 
     return {
       ragBreakdown,
@@ -298,6 +300,7 @@ export default function DashboardPage() {
       deliverablePct,
       teamUtilization,
       utilizationAvg,
+      stalledBlockers,
     };
   }, [data]);
 
@@ -313,8 +316,8 @@ export default function DashboardPage() {
         subtitle="Portfolio health, project pressure, delivery runway, and team capacity."
       />
 
-      <Grid container spacing={2.5}>
-        <Grid item xs={12} sm={6} lg={3}>
+      <Grid container spacing={1.5}>
+        <Grid item xs={12} sm={6} lg={2.4}>
           <KpiCard
             label="Active projects"
             value={safeNumber(data.active_project_count)}
@@ -323,7 +326,7 @@ export default function DashboardPage() {
             onClick={() => navigate('/projects')}
           />
         </Grid>
-        <Grid item xs={12} sm={6} lg={3}>
+        <Grid item xs={12} sm={6} lg={2.4}>
           <KpiCard
             label="Budget burn"
             value={money(data.total_budget_used)}
@@ -332,7 +335,7 @@ export default function DashboardPage() {
             onClick={() => navigate('/projects')}
           />
         </Grid>
-        <Grid item xs={12} sm={6} lg={3}>
+        <Grid item xs={12} sm={6} lg={2.4}>
           <KpiCard
             label="Hours logged"
             value={hours(data.total_hours_used)}
@@ -341,7 +344,7 @@ export default function DashboardPage() {
             onClick={() => navigate('/usage')}
           />
         </Grid>
-        <Grid item xs={12} sm={6} lg={3}>
+        <Grid item xs={12} sm={6} lg={2.4}>
           <KpiCard
             label="Deliverables"
             value={safeNumber(data.total_deliverables)}
@@ -350,27 +353,36 @@ export default function DashboardPage() {
             onClick={() => navigate('/deliverables')}
           />
         </Grid>
+        <Grid item xs={12} sm={6} lg={2.4}>
+          <KpiCard
+            label="Stalled impact"
+            value={safeNumber(data.stalling_deliverables_count)}
+            sub={`${safeNumber(data.stalled_blocking_project_count)} impacted projects / ${safeNumber(data.stalled_deliverables)} stalled`}
+            icon={<WarningAmberOutlinedIcon />}
+            onClick={() => navigate('/deliverables')}
+          />
+        </Grid>
 
         <Grid item xs={12} lg={4}>
           <Card sx={{ height: '100%' }}>
-            <CardContent>
+            <CardContent sx={{ py: 1.5, px: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
                 <Box>
-                  <Typography variant="overline" color="text.secondary">RAG distribution</Typography>
-                  <Typography variant="h6">Active project health</Typography>
+                  <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.75rem' }}>RAG distribution</Typography>
+                  <Typography variant="h6" sx={{ fontSize: '1rem' }}>Active project health</Typography>
                 </Box>
                 {activeRag && <RagChip status={activeRag} withLabel />}
               </Stack>
-              <Box sx={{ height: 286, cursor: 'pointer' }} onClick={() => navigate('/projects')}>
+              <Box sx={{ height: 200, cursor: 'pointer' }} onClick={() => navigate('/projects')}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={view.ragRing}
                       dataKey="value"
                       nameKey="name"
-                      innerRadius={76}
-                      outerRadius={106}
-                      paddingAngle={3}
+                      innerRadius={56}
+                      outerRadius={78}
+                      paddingAngle={2}
                       isAnimationActive={false}
                       onMouseEnter={(entry) => setActiveRag(entry.name)}
                       onMouseLeave={() => setActiveRag(null)}
@@ -400,13 +412,13 @@ export default function DashboardPage() {
 
         <Grid item xs={12} lg={4}>
           <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+            <CardContent sx={{ py: 1.5, px: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
                 <Box>
-                  <Typography variant="overline" color="text.secondary">Team load</Typography>
-                  <Typography variant="h6">Utilization</Typography>
+                  <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.75rem' }}>Team load</Typography>
+                  <Typography variant="h6" sx={{ fontSize: '1rem' }}>Utilization</Typography>
                 </Box>
-                <Typography className="tnum" sx={{ color: 'text.primary', fontWeight: 700 }}>
+                <Typography className="tnum" sx={{ color: 'text.primary', fontWeight: 700, fontSize: '0.9rem' }}>
                   {percent(view.utilizationAvg)}
                 </Typography>
               </Stack>
@@ -414,7 +426,7 @@ export default function DashboardPage() {
                 sx={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-                  gap: 2,
+                  gap: 1.2,
                   overflow: 'hidden',
                 }}
               >
@@ -428,13 +440,13 @@ export default function DashboardPage() {
 
         <Grid item xs={12} lg={4}>
           <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+            <CardContent sx={{ py: 1.5, px: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
                 <Box>
-                  <Typography variant="overline" color="text.secondary">Project runway</Typography>
-                  <Typography variant="h6">Health bars</Typography>
+                  <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.75rem' }}>Project runway</Typography>
+                  <Typography variant="h6" sx={{ fontSize: '1rem' }}>Health bars</Typography>
                 </Box>
-                <PeopleOutlinedIcon sx={{ color: 'text.secondary' }} />
+                <PeopleOutlinedIcon sx={{ color: 'text.secondary', fontSize: 18 }} />
               </Stack>
               <RunwayBars projects={view.topProjects} onProject={drillProject} />
             </CardContent>
@@ -473,6 +485,37 @@ export default function DashboardPage() {
               { dataKey: 'budget_remaining_percent', name: 'Remaining', fill: SUBTLE_FILL },
             ]}
           />
+        </Grid>
+
+        <Grid item xs={12}>
+          <Card>
+            <CardContent sx={{ py: 1.5, px: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                <Box>
+                  <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.75rem' }}>Cross-project blockers</Typography>
+                  <Typography variant="h6" sx={{ fontSize: '1rem' }}>Deliverables currently stalling other projects</Typography>
+                </Box>
+                <WarningAmberOutlinedIcon sx={{ color: rag.amber.main, fontSize: 18 }} />
+              </Stack>
+              {view.stalledBlockers.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">No stalled cross-project blockers right now.</Typography>
+              ) : (
+                <Stack spacing={0.75}>
+                  {view.stalledBlockers.map((item) => (
+                    <Stack key={item.deliverable_id} direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" sx={{ py: 0.75, borderBottom: '1px solid rgba(148,163,184,0.16)' }}>
+                      <Box>
+                        <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>{item.title}</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>{item.project_name}</Typography>
+                      </Box>
+                      <Typography variant="body2" className="tnum" color="warning.main" sx={{ fontSize: '0.875rem' }}>
+                        {item.stalled_downstream_count} stalled deliverables across {item.stalled_downstream_project_count} projects
+                      </Typography>
+                    </Stack>
+                  ))}
+                </Stack>
+              )}
+            </CardContent>
+          </Card>
         </Grid>
       </Grid>
     </Box>

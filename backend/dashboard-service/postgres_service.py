@@ -26,6 +26,7 @@ def _deliverable_status_label(status: str | None) -> str:
         "pending": "Pending",
         "in_progress": "In progress",
         "completed": "Completed",
+        "stalled": "Stalled",
     }.get(str(status or "").lower(), str(status or "Unknown").replace("_", " ").title())
 
 
@@ -230,6 +231,7 @@ def get_portfolio_dashboard(allocated_employee_id: str | None = None) -> dict:
             f"""
             SELECT COUNT(*) AS total_deliverables,
                    COUNT(*) FILTER (WHERE status = 'completed') AS completed_deliverables,
+                   COUNT(*) FILTER (WHERE status = 'stalled') AS stalled_deliverables,
                    COUNT(*) FILTER (WHERE assigned_employee_id IS NULL) AS unassigned_deliverables
             FROM project_deliverables pd
             {deliverable_where}
@@ -237,6 +239,60 @@ def get_portfolio_dashboard(allocated_employee_id: str | None = None) -> dict:
             deliverable_params,
         )
         deliverable_totals = cur.fetchone() or {}
+
+        blocker_scope = ""
+        blocker_params = []
+        if allocated_employee_id:
+            blocker_scope = (
+                """
+                AND EXISTS (
+                    SELECT 1 FROM project_resource_allocations scope_pra
+                    WHERE scope_pra.project_id = upstream.project_id
+                      AND scope_pra.employee_id = %s
+                )
+                """
+            )
+            blocker_params.append(allocated_employee_id)
+
+        cur.execute(
+            f"""
+            SELECT upstream.id,
+                   upstream.title,
+                   upstream.project_id,
+                   p.name AS project_name,
+                   upstream.status,
+                   COUNT(*) FILTER (WHERE downstream.project_id <> upstream.project_id) AS stalled_downstream_count,
+                   COUNT(DISTINCT downstream.project_id)
+                       FILTER (WHERE downstream.project_id <> upstream.project_id) AS stalled_downstream_project_count
+            FROM project_deliverables upstream
+            JOIN deliverable_dependencies dd ON dd.depends_on_deliverable_id = upstream.id
+            JOIN project_deliverables downstream ON downstream.id = dd.deliverable_id
+            JOIN projects p ON p.id = upstream.project_id
+            WHERE downstream.status = 'stalled'
+              AND upstream.status IN ('pending', 'in_progress', 'stalled')
+              {blocker_scope}
+            GROUP BY upstream.id, upstream.title, upstream.project_id, p.name, upstream.status
+            HAVING COUNT(*) FILTER (WHERE downstream.project_id <> upstream.project_id) > 0
+            ORDER BY stalled_downstream_project_count DESC, stalled_downstream_count DESC, upstream.title
+            """,
+            blocker_params,
+        )
+        stalled_blocker_rows = cur.fetchall()
+
+        cur.execute(
+            f"""
+            SELECT COUNT(DISTINCT downstream.project_id) AS stalled_blocking_project_count
+            FROM project_deliverables upstream
+            JOIN deliverable_dependencies dd ON dd.depends_on_deliverable_id = upstream.id
+            JOIN project_deliverables downstream ON downstream.id = dd.deliverable_id
+            WHERE downstream.status = 'stalled'
+              AND upstream.status IN ('pending', 'in_progress', 'stalled')
+              AND downstream.project_id <> upstream.project_id
+              {blocker_scope}
+            """,
+            blocker_params,
+        )
+        stalled_blocking_projects_row = cur.fetchone() or {}
 
     rag_breakdown = {"Green": 0, "Amber": 0, "Red": 0}
     for row in rag_rows:
@@ -266,6 +322,20 @@ def get_portfolio_dashboard(allocated_employee_id: str | None = None) -> dict:
     total_budget_used = sum(float(p.get("budget_used") or 0) for p in projects)
     total_allocated_hours = sum(float(p.get("allocated_hours") or 0) for p in projects)
     total_hours_used = sum(float(p.get("hours_used") or 0) for p in projects)
+    stalled_blocking_project_count = int(stalled_blocking_projects_row.get("stalled_blocking_project_count") or 0)
+
+    stalled_blockers = [
+        {
+            "deliverable_id": row.get("id"),
+            "title": row.get("title"),
+            "project_id": row.get("project_id"),
+            "project_name": row.get("project_name"),
+            "status": _deliverable_status_label(row.get("status")),
+            "stalled_downstream_count": int(row.get("stalled_downstream_count") or 0),
+            "stalled_downstream_project_count": int(row.get("stalled_downstream_project_count") or 0),
+        }
+        for row in stalled_blocker_rows
+    ]
 
     return {
         "project_count": active_project_count,
@@ -288,7 +358,11 @@ def get_portfolio_dashboard(allocated_employee_id: str | None = None) -> dict:
         "overallocated_employees": len([employee for employee in team_utilization if employee.get("overallocated")]),
         "total_deliverables": int(deliverable_totals.get("total_deliverables") or 0),
         "completed_deliverables": int(deliverable_totals.get("completed_deliverables") or 0),
+        "stalled_deliverables": int(deliverable_totals.get("stalled_deliverables") or 0),
         "unassigned_deliverables": int(deliverable_totals.get("unassigned_deliverables") or 0),
+        "stalling_deliverables_count": len(stalled_blockers),
+        "stalled_blocking_project_count": stalled_blocking_project_count,
+        "stalled_blockers": stalled_blockers,
         "at_risk_projects": [p for p in projects if p["rag_status"] == "Red"],
         "projects": projects,
     }

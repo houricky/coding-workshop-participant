@@ -256,8 +256,10 @@ export default function AppLayout() {
           flexGrow: 1,
           width: { md: `calc(100% - ${drawerWidth}px)` },
           px: { xs: 2, sm: 3, md: 4 },
-          py: 3,
-          mt: 8,
+          py: 2.5,
+          mt: 9,
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
         <Outlet />

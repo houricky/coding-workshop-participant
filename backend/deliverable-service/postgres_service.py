@@ -1,4 +1,4 @@
-"""Deliverable domain — project deliverable CRUD operations."""
+"""Deliverable domain — deliverable CRUD and dependency graph operations."""
 
 from psycopg import errors
 
@@ -8,6 +8,8 @@ DELIVERABLE_COLS = (
     "id, project_id, title, description, due_date, assigned_employee_id, "
     "status, created_at, updated_at"
 )
+
+DEPENDENCY_COLS = "id, deliverable_id, depends_on_deliverable_id, created_at"
 
 
 def _project(row: dict) -> dict:
@@ -37,6 +39,9 @@ def _deliverable(row: dict) -> dict:
     return {
         **row,
         "employee_id": row.get("assigned_employee_id"),
+        "blocked_by_count": int(row.get("blocked_by_count") or 0),
+        "blocks_count": int(row.get("blocks_count") or 0),
+        "blocked_project_count": int(row.get("blocked_project_count") or 0),
         "project": _project(row),
         "employee": _employee(row),
     }
@@ -45,12 +50,83 @@ def _deliverable(row: dict) -> dict:
 def _select_sql(where: str = "") -> str:
     return f"""
         SELECT pd.*, p.name AS project_name, p.stage AS project_stage,
-               e.first_name, e.last_name, e.email, e.role AS employee_role, e.job_title
+               e.first_name, e.last_name, e.email, e.role AS employee_role, e.job_title,
+               (
+                   SELECT COUNT(*)
+                   FROM deliverable_dependencies dd
+                   WHERE dd.deliverable_id = pd.id
+               ) AS blocked_by_count,
+               (
+                   SELECT COUNT(*)
+                   FROM deliverable_dependencies dd
+                   WHERE dd.depends_on_deliverable_id = pd.id
+               ) AS blocks_count,
+               (
+                   SELECT COUNT(DISTINCT downstream.project_id)
+                   FROM deliverable_dependencies dd
+                   JOIN project_deliverables downstream ON downstream.id = dd.deliverable_id
+                   WHERE dd.depends_on_deliverable_id = pd.id
+                     AND downstream.project_id <> pd.project_id
+               ) AS blocked_project_count
         FROM project_deliverables pd
         LEFT JOIN projects p ON p.id = pd.project_id
         LEFT JOIN employees e ON e.id = pd.assigned_employee_id
         {where}
     """
+
+
+def _dependency_select_sql(where: str = "") -> str:
+    return f"""
+        SELECT dd.id,
+               dd.deliverable_id,
+               dd.depends_on_deliverable_id,
+               dd.created_at,
+               d.title AS deliverable_title,
+               d.project_id AS deliverable_project_id,
+               p.name AS deliverable_project_name,
+               p.stage AS deliverable_project_stage,
+               u.title AS depends_on_deliverable_title,
+               u.project_id AS depends_on_project_id,
+               up.name AS depends_on_project_name,
+               up.stage AS depends_on_project_stage,
+               u.status AS depends_on_status
+        FROM deliverable_dependencies dd
+        JOIN project_deliverables d ON d.id = dd.deliverable_id
+        JOIN project_deliverables u ON u.id = dd.depends_on_deliverable_id
+        LEFT JOIN projects p ON p.id = d.project_id
+        LEFT JOIN projects up ON up.id = u.project_id
+        {where}
+    """
+
+
+def _dependency(row: dict) -> dict:
+    return {
+        "id": row.get("id"),
+        "deliverable_id": row.get("deliverable_id"),
+        "depends_on_deliverable_id": row.get("depends_on_deliverable_id"),
+        "created_at": row.get("created_at"),
+        "deliverable": {
+            "id": row.get("deliverable_id"),
+            "title": row.get("deliverable_title"),
+            "project_id": row.get("deliverable_project_id"),
+            "project": {
+                "id": row.get("deliverable_project_id"),
+                "name": row.get("deliverable_project_name"),
+                "stage": row.get("deliverable_project_stage"),
+            },
+        },
+        "depends_on": {
+            "id": row.get("depends_on_deliverable_id"),
+            "title": row.get("depends_on_deliverable_title"),
+            "status": row.get("depends_on_status"),
+            "project_id": row.get("depends_on_project_id"),
+            "project": {
+                "id": row.get("depends_on_project_id"),
+                "name": row.get("depends_on_project_name"),
+                "stage": row.get("depends_on_project_stage"),
+            },
+        },
+    }
 
 
 def is_employee_allocated(project_id: str, employee_id: str | None) -> bool:
@@ -99,6 +175,22 @@ def _project_id_for_deliverable(deliverable_id: str) -> str | None:
     conn = get_connection()
     with conn.cursor() as cur:
         cur.execute("SELECT project_id FROM project_deliverables WHERE id = %s", (deliverable_id,))
+        row = cur.fetchone()
+        return row["project_id"] if row else None
+
+
+def _project_id_for_dependency(dependency_id: str) -> str | None:
+    conn = get_connection()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT pd.project_id
+            FROM deliverable_dependencies dd
+            JOIN project_deliverables pd ON pd.id = dd.deliverable_id
+            WHERE dd.id = %s
+            """,
+            (dependency_id,),
+        )
         row = cur.fetchone()
         return row["project_id"] if row else None
 
@@ -227,6 +319,128 @@ def delete_deliverable(deliverable_id: str) -> bool:
     try:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM project_deliverables WHERE id = %s RETURNING id", (deliverable_id,))
+            row = cur.fetchone()
+            conn.commit()
+            return row is not None
+    except Exception:
+        conn.rollback()
+        reset_connection()
+        raise
+
+
+def list_deliverable_dependencies(
+    deliverable_id: str | None = None,
+    project_id: str | None = None,
+    allocated_employee_id: str | None = None,
+) -> list:
+    conn = get_connection()
+    conditions = []
+    params = []
+
+    if deliverable_id:
+        conditions.append("(dd.deliverable_id = %s OR dd.depends_on_deliverable_id = %s)")
+        params.extend([deliverable_id, deliverable_id])
+    if project_id:
+        conditions.append("d.project_id = %s")
+        params.append(project_id)
+    if allocated_employee_id:
+        conditions.append(
+            """
+            EXISTS (
+                SELECT 1 FROM project_resource_allocations pra
+                WHERE pra.project_id = d.project_id
+                  AND pra.employee_id = %s
+            )
+            """
+        )
+        params.append(allocated_employee_id)
+
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    with conn.cursor() as cur:
+        cur.execute(f"{_dependency_select_sql(where)} ORDER BY dd.created_at", params)
+        return [_dependency(row) for row in cur.fetchall()]
+
+
+def get_deliverable_dependency(dependency_id: str) -> dict | None:
+    conn = get_connection()
+    with conn.cursor() as cur:
+        cur.execute(_dependency_select_sql("WHERE dd.id = %s"), (dependency_id,))
+        row = cur.fetchone()
+        return _dependency(row) if row else None
+
+
+def create_deliverable_dependency(data: dict) -> dict:
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                INSERT INTO deliverable_dependencies (deliverable_id, depends_on_deliverable_id)
+                VALUES (%s, %s)
+                RETURNING {DEPENDENCY_COLS}
+                """,
+                (data["deliverable_id"], data["depends_on_deliverable_id"]),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return get_deliverable_dependency(row["id"])
+    except errors.UniqueViolation:
+        conn.rollback()
+        raise ValueError("Dependency already exists")
+    except errors.ForeignKeyViolation:
+        conn.rollback()
+        raise ValueError("Invalid deliverable_id or depends_on_deliverable_id")
+    except Exception as exc:
+        conn.rollback()
+        reset_connection()
+        if "Circular deliverable dependency detected" in str(exc):
+            raise ValueError("Circular deliverable dependency detected") from exc
+        raise
+
+
+def update_deliverable_dependency(dependency_id: str, data: dict) -> dict | None:
+    existing = get_deliverable_dependency(dependency_id)
+    if not existing:
+        return None
+
+    deliverable_id = data.get("deliverable_id", existing["deliverable_id"])
+    depends_on_deliverable_id = data.get("depends_on_deliverable_id", existing["depends_on_deliverable_id"])
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                UPDATE deliverable_dependencies
+                SET deliverable_id = %s,
+                    depends_on_deliverable_id = %s
+                WHERE id = %s
+                RETURNING {DEPENDENCY_COLS}
+                """,
+                (deliverable_id, depends_on_deliverable_id, dependency_id),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return get_deliverable_dependency(row["id"]) if row else None
+    except errors.UniqueViolation:
+        conn.rollback()
+        raise ValueError("Dependency already exists")
+    except errors.ForeignKeyViolation:
+        conn.rollback()
+        raise ValueError("Invalid deliverable_id or depends_on_deliverable_id")
+    except Exception as exc:
+        conn.rollback()
+        reset_connection()
+        if "Circular deliverable dependency detected" in str(exc):
+            raise ValueError("Circular deliverable dependency detected") from exc
+        raise
+
+
+def delete_deliverable_dependency(dependency_id: str) -> bool:
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM deliverable_dependencies WHERE id = %s RETURNING id", (dependency_id,))
             row = cur.fetchone()
             conn.commit()
             return row is not None

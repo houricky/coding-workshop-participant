@@ -23,7 +23,7 @@ logger.setLevel(logging.INFO)
 
 SERVICE_NAME = "project-service"
 VALID_STAGES = {"planning", "active", "on_hold", "completed", "cancelled"}
-VALID_DELIVERABLE_STATUSES = {"pending", "in_progress", "completed"}
+VALID_DELIVERABLE_STATUSES = {"pending", "in_progress", "completed", "stalled"}
 
 
 def handler(event=None, context=None):

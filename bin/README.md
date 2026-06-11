@@ -22,6 +22,12 @@ To deploy your backend to AWS:
 ./bin/deploy-backend.sh
 ```
 
+To apply database migrations to AWS:
+
+```sh
+./bin/migrate-cloud-db.sh
+```
+
 To deploy your frontend to AWS:
 
 ```sh
@@ -57,6 +63,32 @@ To deploy your frontend to AWS:
 
 ```sh
 ./bin/deploy-backend.sh [aws|local]
+```
+
+### `migrate-cloud-db.sh`
+
+Applies PostgreSQL schema migrations to the deployed AWS database.
+
+**What it does**:
+
+* Loads participant AWS credentials from `ENVIRONMENT.config`
+* Reads the RDS host, port, database, username, and password from Terraform state
+* Tries to run `database/migrate.sh` directly against the AWS PostgreSQL database
+* Falls back to a temporary in-VPC Lambda migrator when RDS is not reachable from your machine
+* Uses SSL and a short connection timeout for cloud DB connections
+* Leaves seed data untouched unless `--seed` is passed
+
+**When to use**:
+
+* After `./bin/deploy-backend.sh aws` creates or updates cloud infrastructure
+* After changing files in `database/schema/`
+* When Lambda code expects a newer schema than the deployed database has
+
+**Usage**:
+
+```sh
+./bin/migrate-cloud-db.sh
+./bin/migrate-cloud-db.sh --seed
 ```
 
 ### `deploy-frontend.sh`

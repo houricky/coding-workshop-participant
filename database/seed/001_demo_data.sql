@@ -14,6 +14,14 @@ WHERE id IN (
     '77777777-7777-7777-7777-777777777709'
 );
 
+DELETE FROM deliverable_dependencies
+WHERE id IN (
+    '99999999-9999-9999-9999-999999999901',
+    '99999999-9999-9999-9999-999999999902',
+    '99999999-9999-9999-9999-999999999903',
+    '99999999-9999-9999-9999-999999999904'
+);
+
 DELETE FROM project_deliverables
 WHERE id IN (
     '88888888-8888-8888-8888-888888888801',
@@ -540,6 +548,30 @@ ON CONFLICT (id) DO UPDATE SET
     project_id = EXCLUDED.project_id,
     depends_on_project_id = EXCLUDED.depends_on_project_id,
     dependency_type = EXCLUDED.dependency_type;
+
+-- Cross-project deliverable dependency tree.
+-- If Authentication integration completes, downstream stalled items auto-resume to in_progress.
+INSERT INTO deliverable_dependencies (id, deliverable_id, depends_on_deliverable_id)
+VALUES
+    -- Billing retry runbook depends on customer portal auth integration.
+    ('99999999-9999-9999-9999-999999999901',
+     '88888888-8888-8888-8888-888888888811',
+     '88888888-8888-8888-8888-888888888805'),
+    -- Compliance packet depends on billing retry runbook.
+    ('99999999-9999-9999-9999-999999999902',
+     '88888888-8888-8888-8888-888888888821',
+     '88888888-8888-8888-8888-888888888811'),
+    -- Security audit logging rollout depends on compliance packet.
+    ('99999999-9999-9999-9999-999999999903',
+     '88888888-8888-8888-8888-888888888817',
+     '88888888-8888-8888-8888-888888888821'),
+    -- Mobile pilot test matrix depends on billing QA signoff.
+    ('99999999-9999-9999-9999-999999999904',
+     '88888888-8888-8888-8888-888888888815',
+     '88888888-8888-8888-8888-888888888812')
+ON CONFLICT (id) DO UPDATE SET
+    deliverable_id = EXCLUDED.deliverable_id,
+    depends_on_deliverable_id = EXCLUDED.depends_on_deliverable_id;
 
 -- Recalculate RAG for all demo projects
 SELECT fn_refresh_budget_used(project_id) FROM project_budgets;

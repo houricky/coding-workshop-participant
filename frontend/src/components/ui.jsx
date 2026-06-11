@@ -140,12 +140,12 @@ export function PageHeader({ title, subtitle, action }) {
       justifyContent="space-between"
       alignItems={{ xs: 'flex-start', sm: 'center' }}
       spacing={2}
-      sx={{ mb: 3 }}
+      sx={{ mb: 1.5 }}
     >
       <Box>
-        <Typography variant="h5">{title}</Typography>
+        <Typography variant="h5" sx={{ fontSize: '1.3rem' }}>{title}</Typography>
         {subtitle && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, fontSize: '0.875rem' }}>
             {subtitle}
           </Typography>
         )}

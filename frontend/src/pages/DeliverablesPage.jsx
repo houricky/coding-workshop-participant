@@ -24,10 +24,11 @@ const STATUSES = [
   { value: '', label: 'All statuses' },
   { value: 'pending', label: 'Pending' },
   { value: 'in_progress', label: 'In progress' },
+  { value: 'stalled', label: 'Stalled' },
   { value: 'completed', label: 'Completed' },
 ];
-const deliverableStatusLabel = (status) => ({ pending: 'Pending', in_progress: 'In progress', completed: 'Completed' }[status] || status || 'Pending');
-const deliverableStatusColor = (status) => ({ completed: 'success', in_progress: 'warning', pending: 'default' }[status] || 'default');
+const deliverableStatusLabel = (status) => ({ pending: 'Pending', in_progress: 'In progress', stalled: 'Stalled', completed: 'Completed' }[status] || status || 'Pending');
+const deliverableStatusColor = (status) => ({ completed: 'success', in_progress: 'warning', stalled: 'error', pending: 'default' }[status] || 'default');
 
 export default function DeliverablesPage() {
   const navigate = useNavigate();
@@ -35,6 +36,8 @@ export default function DeliverablesPage() {
   const [projects, setProjects] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [allocations, setAllocations] = useState([]);
+  const [dependencies, setDependencies] = useState([]);
+  const [allDeliverables, setAllDeliverables] = useState([]);
   const [filters, setFilters] = useState({ project_id: '', employee_id: '', status: '' });
   const [error, setError] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -48,12 +51,16 @@ export default function DeliverablesPage() {
     setError('');
     Promise.all([
       deliverablesApi.list(params),
+      deliverablesApi.list(),
+      deliverablesApi.listDependencies(),
       projectsApi.list(),
       employeesApi.list(),
       allocationsApi.list(),
     ])
-      .then(([deliverableRows, projectRows, employeeRows, allocationRows]) => {
+      .then(([deliverableRows, allDeliverableRows, dependencyRows, projectRows, employeeRows, allocationRows]) => {
         setRows(deliverableRows);
+        setAllDeliverables(allDeliverableRows);
+        setDependencies(dependencyRows);
         setProjects(projectRows);
         setEmployees(employeeRows);
         setAllocations(allocationRows);
@@ -73,12 +80,34 @@ export default function DeliverablesPage() {
     setDialogOpen(false);
     setToEdit(null);
   };
-  const saveDeliverable = async (payload) => {
+  const saveDeliverable = async (payload, dependsOnIds = []) => {
+    let targetDeliverableId = toEdit?.id;
     if (toEdit?.id) {
       await deliverablesApi.update(toEdit.id, payload);
     } else {
-      await deliverablesApi.create(payload);
+      const created = await deliverablesApi.create(payload);
+      targetDeliverableId = created?.id;
     }
+
+    if (targetDeliverableId) {
+      const existingDeps = dependencies
+        .filter((dependency) => dependency.deliverable_id === targetDeliverableId)
+        .map((dependency) => ({ id: dependency.id, dependsOnId: dependency.depends_on_deliverable_id }));
+      const existingIds = new Set(existingDeps.map((dependency) => dependency.dependsOnId));
+      const selectedIds = new Set(dependsOnIds);
+
+      const toCreate = dependsOnIds.filter((dependencyId) => !existingIds.has(dependencyId));
+      const toDelete = existingDeps.filter((dependency) => !selectedIds.has(dependency.dependsOnId));
+
+      await Promise.all([
+        ...toCreate.map((dependsOnId) => deliverablesApi.createDependency({
+          deliverable_id: targetDeliverableId,
+          depends_on_deliverable_id: dependsOnId,
+        })),
+        ...toDelete.map((dependency) => deliverablesApi.removeDependency(dependency.id)),
+      ]);
+    }
+
     load();
   };
   const confirmDelete = async () => {
@@ -111,6 +140,18 @@ export default function DeliverablesPage() {
   const projectOptions = user?.role === 'manager'
     ? projects.filter((project) => leadProjectIds.has(project.id))
     : projects;
+  const dependencyOptions = allDeliverables
+    .map((deliverable) => ({
+      id: deliverable.id,
+      title: deliverable.title,
+      project_id: deliverable.project_id,
+      project_name: deliverable.project?.name || projects.find((project) => project.id === deliverable.project_id)?.name || 'Unknown project',
+    }));
+  const currentDependencyIds = toEdit?.id
+    ? dependencies
+      .filter((dependency) => dependency.deliverable_id === toEdit.id)
+      .map((dependency) => dependency.depends_on_deliverable_id)
+    : [];
 
   if (error && !rows) return <Alert severity="error">{error}</Alert>;
   if (!rows) return <LoadingState label="Loading deliverables" />;
@@ -172,6 +213,8 @@ export default function DeliverablesPage() {
                   <TableCell>Assignee</TableCell>
                   <TableCell>Due date</TableCell>
                   <TableCell>Status</TableCell>
+                  <TableCell>Blocked by</TableCell>
+                  <TableCell>Stalls</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -201,6 +244,11 @@ export default function DeliverablesPage() {
                       <Chip size="small" color={deliverableStatusColor(deliverable.status)}
                         label={deliverableStatusLabel(deliverable.status)} />
                     </TableCell>
+                    <TableCell className="tnum">{deliverable.blocked_by_count || 0}</TableCell>
+                    <TableCell className="tnum">
+                      {deliverable.blocks_count || 0}
+                      {deliverable.blocked_project_count > 0 && ` / ${deliverable.blocked_project_count} projects`}
+                    </TableCell>
                     <TableCell align="right">
                       <Stack direction="row" justifyContent="flex-end">
                         {canEditDeliverable(deliverable) && (
@@ -228,7 +276,8 @@ export default function DeliverablesPage() {
       )}
 
       <DeliverableFormDialog open={dialogOpen} initial={toEdit} projectOptions={projectOptions}
-        assigneeOptions={assigneeOptions} currentUser={user} onClose={closeDialog} onSubmit={saveDeliverable} />
+        assigneeOptions={assigneeOptions} dependencyOptions={dependencyOptions} initialDependencyIds={currentDependencyIds}
+        currentUser={user} onClose={closeDialog} onSubmit={saveDeliverable} />
       <ConfirmDialog open={!!toDelete} title="Delete deliverable?" confirmLabel="Delete"
         message={`Delete ${toDelete?.title || 'this deliverable'}?`}
         onClose={() => setToDelete(null)} onConfirm={confirmDelete} />
