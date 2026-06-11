@@ -26,11 +26,60 @@ const endpoint = {
   dashboard: '/api/dashboard-service',
 };
 
+const STAGE_TO_API = {
+  Planning: 'planning',
+  'In progress': 'active',
+  'On hold': 'on_hold',
+  Completed: 'completed',
+  Cancelled: 'cancelled',
+};
+
+const STAGE_FROM_API = {
+  planning: 'Planning',
+  active: 'In progress',
+  on_hold: 'On hold',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
+
 function splitName(name = '') {
   const parts = String(name).trim().split(/\s+/).filter(Boolean);
   return {
     first_name: parts[0] || '',
     last_name: parts.slice(1).join(' ') || parts[0] || '',
+  };
+}
+
+function projectReadPayload(project) {
+  if (!project || typeof project !== 'object') return project;
+  return {
+    ...project,
+    stage: STAGE_FROM_API[project.stage] || project.stage,
+    dependencies: project.dependencies?.map((dependency) => ({
+      ...dependency,
+      depends_on: projectReadPayload(dependency.depends_on),
+    })),
+    project: projectReadPayload(project.project),
+  };
+}
+
+function projectWritePayload(body) {
+  const allocatedBudget = Number(body.allocated_budget);
+  return {
+    ...body,
+    stage: STAGE_TO_API[body.stage] || body.stage,
+    start_date: body.start_date || null,
+    end_date: body.end_date || null,
+    allocated_budget: allocatedBudget > 0 ? allocatedBudget : undefined,
+  };
+}
+
+function dashboardReadPayload(body) {
+  if (!body || typeof body !== 'object') return body;
+  return {
+    ...body,
+    at_risk_projects: body.at_risk_projects?.map(projectReadPayload) || [],
+    projects: body.projects?.map(projectReadPayload),
   };
 }
 
@@ -69,12 +118,12 @@ export const employees = {
 };
 
 export const projects = {
-  list: () => (USE_MOCK ? mockBackend.listProjects() : unwrap(http.get(endpoint.projects), 'projects')),
-  get: (id) => (USE_MOCK ? mockBackend.getProject(id) : unwrap(http.get(`${endpoint.projects}/${id}`), 'project')),
-  create: (b) => (USE_MOCK ? mockBackend.createProject(b) : unwrap(http.post(endpoint.projects, b), 'project')),
-  update: (id, b) => (USE_MOCK ? mockBackend.updateProject(id, b) : unwrap(http.put(`${endpoint.projects}/${id}`, b), 'project')),
+  list: () => (USE_MOCK ? mockBackend.listProjects() : unwrap(http.get(endpoint.projects), 'projects').then((rows) => rows.map(projectReadPayload))),
+  get: (id) => (USE_MOCK ? mockBackend.getProject(id) : unwrap(http.get(`${endpoint.projects}/${id}`), 'project').then(projectReadPayload)),
+  create: (b) => (USE_MOCK ? mockBackend.createProject(b) : unwrap(http.post(endpoint.projects, projectWritePayload(b)), 'project').then(projectReadPayload)),
+  update: (id, b) => (USE_MOCK ? mockBackend.updateProject(id, b) : unwrap(http.put(`${endpoint.projects}/${id}`, projectWritePayload(b)), 'project').then(projectReadPayload)),
   remove: (id) => (USE_MOCK ? mockBackend.deleteProject(id) : unwrap(http.delete(`${endpoint.projects}/${id}`))),
-  summary: (id) => (USE_MOCK ? mockBackend.projectSummary(id) : unwrap(http.get(`${endpoint.projects}/${id}/summary`), 'summary')),
+  summary: (id) => (USE_MOCK ? mockBackend.projectSummary(id) : unwrap(http.get(`${endpoint.projects}/${id}/summary`), 'summary').then(projectReadPayload)),
 };
 
 export const allocations = {
@@ -106,7 +155,7 @@ export const deliverables = {
 };
 
 export const dashboard = {
-  get: () => (USE_MOCK ? mockBackend.dashboard() : unwrap(http.get(endpoint.dashboard))),
+  get: () => (USE_MOCK ? mockBackend.dashboard() : unwrap(http.get(endpoint.dashboard)).then(dashboardReadPayload)),
 };
 
 export const apiErrorMessage = (err) =>

@@ -14,7 +14,7 @@ from postgres_service import (
     update_project,
 )
 from responses import error_response, json_response, no_content, preflight_response
-from validators import is_valid_uuid, parse_percent, require_fields
+from validators import is_valid_uuid, parse_percent, parse_positive_number, require_fields
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -86,6 +86,11 @@ def create(body: dict):
         return error_response(400, "validation_error", err)
     if pct is not None:
         body["actual_completion_percent"] = pct
+    if "allocated_budget" in body:
+        amount, err = parse_positive_number(body["allocated_budget"], "allocated_budget")
+        if err:
+            return error_response(400, "validation_error", err)
+        body["allocated_budget"] = amount
     validation_error = validate_initial_deliverables(body)
     if validation_error:
         return validation_error
@@ -119,6 +124,11 @@ def update(project_id: str, body: dict):
         if err:
             return error_response(400, "validation_error", err)
         body["actual_completion_percent"] = pct
+    if "allocated_budget" in body:
+        amount, err = parse_positive_number(body["allocated_budget"], "allocated_budget")
+        if err:
+            return error_response(400, "validation_error", err)
+        body["allocated_budget"] = amount
     project = update_project(project_id, body)
     if not project:
         return error_response(404, "not_found", "Project not found")

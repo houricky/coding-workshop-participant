@@ -265,6 +265,18 @@ def create_project(data: dict) -> dict:
             )
             row = cur.fetchone()
 
+            if data.get("allocated_budget") is not None:
+                cur.execute(
+                    """
+                    INSERT INTO project_budgets (project_id, allocated_budget, currency)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (project_id) DO UPDATE
+                    SET allocated_budget = EXCLUDED.allocated_budget,
+                        currency = EXCLUDED.currency
+                    """,
+                    (row["id"], data["allocated_budget"], data.get("currency", "USD")),
+                )
+
             for deliverable in deliverables:
                 assigned_employee_id = deliverable.get("employee_id", deliverable.get("assigned_employee_id"))
                 if assigned_employee_id:
@@ -316,19 +328,41 @@ def update_project(project_id: str, data: dict) -> dict | None:
         "start_date", "end_date", "project_manager_id",
     }
     updates = {k: v for k, v in data.items() if k in allowed}
-    if not updates:
+    has_budget_update = data.get("allocated_budget") is not None
+    if not updates and not has_budget_update:
         return get_project(project_id)
 
-    set_clause = ", ".join(f"{k} = %s" for k in updates)
-    params = list(updates.values()) + [project_id]
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                f"UPDATE projects SET {set_clause} WHERE id = %s RETURNING {PROJECT_COLS}",
-                params,
-            )
-            row = cur.fetchone()
+            if updates:
+                set_clause = ", ".join(f"{k} = %s" for k in updates)
+                params = list(updates.values()) + [project_id]
+                cur.execute(
+                    f"UPDATE projects SET {set_clause} WHERE id = %s RETURNING {PROJECT_COLS}",
+                    params,
+                )
+                row = cur.fetchone()
+                if not row:
+                    conn.rollback()
+                    return None
+            else:
+                cur.execute("SELECT id FROM projects WHERE id = %s", (project_id,))
+                if not cur.fetchone():
+                    conn.rollback()
+                    return None
+
+            if has_budget_update:
+                cur.execute(
+                    """
+                    INSERT INTO project_budgets (project_id, allocated_budget, currency)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (project_id) DO UPDATE
+                    SET allocated_budget = EXCLUDED.allocated_budget,
+                        currency = EXCLUDED.currency
+                    """,
+                    (project_id, data["allocated_budget"], data.get("currency", "USD")),
+                )
             conn.commit()
             return get_project(project_id)
     except Exception:

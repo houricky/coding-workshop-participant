@@ -54,6 +54,7 @@ ENVIRONMENT=${1:-"aws"}
 # Set up PATH and AWS region
 export PATH="$HOME/.local/bin:$PATH"
 export AWS_REGION=${AWS_REGION:-us-east-1}
+export AWS_PAGER=""
 
 echo "INFO: Deploying frontend..."
 echo "INFO: Environment - $ENVIRONMENT"
