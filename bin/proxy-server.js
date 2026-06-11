@@ -26,6 +26,7 @@ const ROUTE_TO_ENDPOINT = {
   dependencies: 'dependency-service',
   dashboard: 'dashboard-service',
   rag: 'rag-service',
+  ai: 'ai-service',
 };
 
 // Read endpoint mappings from .env.local

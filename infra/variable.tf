@@ -45,3 +45,10 @@ variable "aws_mongo_host" {
   type        = string
   default     = null
 }
+
+variable "anthropic_api_key" {
+  description = "Anthropic API key for ai-service (optional)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}

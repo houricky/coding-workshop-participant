@@ -330,6 +330,87 @@ export const mockBackend = {
       projects,
     };
   },
+  // AI (mock responses for demo without API key)
+  async explainProject(projectId) {
+    await delay(400);
+    const p = db.projects.find((x) => x.id === projectId);
+    if (!p) throw notFound('Project');
+    const derived = deriveProject(p);
+    const gap = derived.progress_gap;
+    return {
+      project_id: projectId,
+      insight: {
+        headline: gap > 25 ? 'Burn is significantly outpacing delivery' : gap > 10 ? 'Project needs attention on burn vs progress' : 'Project is tracking within tolerance',
+        why: [
+          `Budget ${derived.budget_used?.toLocaleString()} of ${derived.allocated_budget?.toLocaleString()} consumed`,
+          `Completion at ${derived.actual_completion_percent}% with ${gap}-point progress gap`,
+        ],
+        risks: gap > 10 ? ['Continued burn at this rate may exceed budget before delivery completes'] : [],
+        actions: [
+          { priority: gap > 25 ? 'high' : 'medium', text: 'Review recent usage entries and update completion % if milestones were reached' },
+          { priority: 'medium', text: 'Confirm allocations match remaining scope' },
+        ],
+        confidence: 'high',
+      },
+    };
+  },
+  async aiChat(message) {
+    await delay(500);
+    const projects = db.projects.map(deriveProject);
+    const lower = message.toLowerCase();
+    if (lower.includes('overalloc')) {
+      const over = db.employees.map(deriveEmployee).filter((e) => e.overallocated);
+      return {
+        answer: over.length
+          ? `There are ${over.length} overallocated employees: ${over.map((e) => e.name).join(', ')}.`
+          : 'No employees are currently overallocated.',
+        sources: ['v_employee_allocation_summary'],
+        intent: 'overallocations',
+      };
+    }
+    if (lower.includes('red') || lower.includes('risk') || lower.includes('attention')) {
+      const atRisk = projects.filter((p) => p.rag_status === 'Red' || p.rag_status === 'Amber');
+      return {
+        answer: atRisk.length
+          ? `Projects needing attention: ${atRisk.map((p) => `${p.name} (${p.rag_status}, ${p.progress_gap}-pt gap)`).join('; ')}.`
+          : 'All projects are green — nothing at risk right now.',
+        sources: ['v_project_summary'],
+        intent: 'at_risk',
+      };
+    }
+    const byStatus = { Green: 0, Amber: 0, Red: 0 };
+    projects.forEach((p) => { byStatus[p.rag_status] += 1; });
+    return {
+      answer: `Portfolio has ${projects.length} projects: ${byStatus.Green} green, ${byStatus.Amber} amber, ${byStatus.Red} red.`,
+      sources: ['v_portfolio_dashboard', 'v_project_summary'],
+      intent: 'portfolio',
+    };
+  },
+  async parseUsage(text) {
+    await delay(400);
+    const hoursMatch = text.match(/(\d+(?:\.\d+)?)\s*h/i);
+    const hours = hoursMatch ? Number(hoursMatch[1]) : null;
+    const lower = text.toLowerCase();
+    const project = db.projects.find((p) => lower.includes(p.name.toLowerCase()));
+    const employee = db.employees.find((e) => lower.includes(e.name.toLowerCase()));
+    const today = new Date().toISOString().slice(0, 10);
+    return {
+      parsed: {
+        project_id: project?.id || null,
+        project_name_guess: project?.name || null,
+        employee_id: employee?.id || null,
+        employee_name_guess: employee?.name || null,
+        hours_used: hours,
+        usage_date: lower.includes('yesterday')
+          ? new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+          : today,
+        notes: text,
+        ambiguities: [],
+        confidence: project && hours ? 'high' : 'medium',
+      },
+    };
+  },
+
 };
 
 function notFound(what) {

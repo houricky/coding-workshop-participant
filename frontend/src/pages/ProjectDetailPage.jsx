@@ -11,6 +11,7 @@ import { PageHeader, LoadingState } from '../components/ui';
 import RagChip from '../components/RagChip';
 import HealthGauge from '../components/HealthGauge';
 import ProjectFormDialog from '../components/ProjectFormDialog';
+import ProjectInsightCard from '../components/ProjectInsightCard';
 import { projects as projectsApi, apiErrorMessage } from '../services/api';
 import { money, hours, percent, formatDate, initials, clampPercent } from '../utils/format';
 import { ragMeta } from '../theme';
@@ -190,6 +191,8 @@ export default function ProjectDetailPage() {
           </Card>
         </Grid>
       </Grid>
+
+      <ProjectInsightCard projectId={p.id} />
 
       <ProjectFormDialog open={editOpen} initial={p} onClose={() => setEditOpen(false)}
         onSubmit={async (payload) => { await projectsApi.update(p.id, payload); load(); }} />

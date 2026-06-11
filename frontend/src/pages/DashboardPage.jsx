@@ -12,6 +12,7 @@ import { PageHeader, StatCard, LoadingState } from '../components/ui';
 import RagChip from '../components/RagChip';
 import HealthGauge from '../components/HealthGauge';
 import { dashboard, apiErrorMessage } from '../services/api';
+import AiCopilotPanel from '../components/AiCopilotPanel';
 import { money, hours, percent, clampPercent } from '../utils/format';
 import { rag } from '../theme';
 
@@ -148,6 +149,8 @@ export default function DashboardPage() {
           </Card>
         </Grid>
       </Grid>
+
+      <AiCopilotPanel />
     </Box>
   );
 }

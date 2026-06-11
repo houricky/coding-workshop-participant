@@ -65,7 +65,16 @@ export const dashboard = {
   get: () => (USE_MOCK ? mockBackend.dashboard() : unwrap(http.get('/dashboard'))),
 };
 
+export const ai = {
+  explainProject: (projectId) =>
+    USE_MOCK ? mockBackend.explainProject(projectId) : unwrap(http.post('/ai/explain-project', { project_id: projectId })),
+  chat: (message, history = []) =>
+    USE_MOCK ? mockBackend.aiChat(message, history) : unwrap(http.post('/ai/chat', { message, history })),
+  parseUsage: (text) =>
+    USE_MOCK ? mockBackend.parseUsage(text) : unwrap(http.post('/ai/parse-usage', { text })),
+};
+
 export const apiErrorMessage = (err) =>
-  err?.response?.data?.detail || err?.message || 'Something went wrong. Please try again.';
+  err?.response?.data?.message || err?.response?.data?.detail || err?.message || 'Something went wrong. Please try again.';
 
 export { USE_MOCK };

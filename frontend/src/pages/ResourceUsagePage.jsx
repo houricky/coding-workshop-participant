@@ -6,6 +6,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { PageHeader, LoadingState, EmptyState, ConfirmDialog } from '../components/ui';
+import SmartUsageInput from '../components/SmartUsageInput';
 import { usage as usageApi, projects as projectsApi, employees as employeesApi, apiErrorMessage } from '../services/api';
 import { hours, money, formatDate } from '../utils/format';
 
@@ -29,6 +30,18 @@ export default function ResourceUsagePage() {
   useEffect(load, []);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const applyParsed = (parsed) => {
+    if (!parsed) return;
+    setForm((f) => ({
+      ...f,
+      project_id: parsed.project_id || f.project_id,
+      employee_id: parsed.employee_id || f.employee_id,
+      hours_used: parsed.hours_used != null ? String(parsed.hours_used) : f.hours_used,
+      logged_on: parsed.usage_date || f.logged_on,
+    }));
+  };
+
   const valid = form.project_id && form.employee_id && Number(form.hours_used) > 0;
 
   const handleAdd = async () => {
@@ -58,6 +71,7 @@ export default function ResourceUsagePage() {
       <Card sx={{ mb: 2.5 }}>
         <CardContent>
           <Typography variant="overline" color="text.secondary">Log hours</Typography>
+          <SmartUsageInput onParsed={applyParsed} />
           <Grid container spacing={2} sx={{ mt: 0 }} alignItems="flex-start">
             <Grid item xs={12} sm={6} md={3}>
               <TextField select size="small" label="Project" value={form.project_id} onChange={set('project_id')} fullWidth>

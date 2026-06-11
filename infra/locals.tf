@@ -88,7 +88,10 @@ locals {
     MONGO_NAME    = data.aws_caller_identity.this.id == "000000000000" ? "mongo" : try(element(aws_docdb_cluster.this.*.database_name, 0), "")
     MONGO_USER    = data.aws_caller_identity.this.id == "000000000000" ? "" : try(element(aws_docdb_cluster.this.*.master_username, 0), "")
     MONGO_PASS    = data.aws_caller_identity.this.id == "000000000000" ? "" : try(element(aws_docdb_cluster.this.*.master_password, 0), "")
-    JWT_SECRET    = format("acme-jwt-%s", local.app_id)
+    JWT_SECRET         = format("acme-jwt-%s", local.app_id)
+    ANTHROPIC_API_KEY  = try(trimspace(var.anthropic_api_key), "")
+    AI_MODEL_FAST      = "claude-sonnet-4-6"
+    AI_MODEL_DEEP      = "claude-opus-4-20250514"
   }
   iam_arns = [
     format("arn:%s:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole", data.aws_partition.this.partition),
