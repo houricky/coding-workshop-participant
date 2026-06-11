@@ -2,14 +2,6 @@ import { Box, Typography, Tooltip } from '@mui/material';
 import { rag, ragMeta } from '../theme';
 import { clampPercent, percent } from '../utils/format';
 
-// ---------------------------------------------------------------------------
-// The signature element of the product.
-//
-// The whole thesis of the tracker is: "is burn outrunning progress?" This gauge
-// shows a single track where the filled bar is BURN (max of budget% / hours%),
-// a vertical marker is actual COMPLETION%, and the shaded span between them is
-// the PROGRESS GAP that drives RAG. One glance answers the core question.
-// ---------------------------------------------------------------------------
 export default function HealthGauge({ burn, completion, status, height = 10, showLabels = true }) {
   const b = clampPercent(burn);
   const c = clampPercent(completion);
@@ -17,7 +9,7 @@ export default function HealthGauge({ burn, completion, status, height = 10, sho
   const fill = meta.color.main;
   const gapStart = Math.min(b, c);
   const gapWidth = Math.abs(b - c);
-  const gapColor = status === 'Green' ? rag.green.main : status === 'Amber' ? rag.amber.main : rag.red.main;
+  const gapColor = status === 'Red' ? rag.red.main : status === 'Amber' ? rag.amber.main : rag.green.main;
 
   return (
     <Box sx={{ width: '100%' }}>
@@ -26,22 +18,20 @@ export default function HealthGauge({ burn, completion, status, height = 10, sho
           position: 'relative',
           height,
           borderRadius: height / 2,
-          bgcolor: 'rgba(27,42,74,0.08)',
+          bgcolor: 'rgba(148,163,184,0.14)',
           overflow: 'hidden',
+          border: '1px solid rgba(148,163,184,0.10)',
         }}
       >
-        {/* burn fill */}
         <Box
           sx={{
             position: 'absolute',
             inset: 0,
             width: `${b}%`,
             bgcolor: fill,
-            opacity: 0.9,
-            transition: 'width .4s ease',
+            opacity: 0.82,
           }}
         />
-        {/* gap band (hatched feel via translucent overlay) */}
         {gapWidth > 0.5 && (
           <Tooltip title={`Progress gap ${percent(Math.abs(burn - completion), 1)}`} arrow>
             <Box
@@ -51,14 +41,13 @@ export default function HealthGauge({ burn, completion, status, height = 10, sho
                 bottom: 0,
                 left: `${gapStart}%`,
                 width: `${gapWidth}%`,
-                backgroundImage: `repeating-linear-gradient(45deg, ${gapColor}33, ${gapColor}33 3px, transparent 3px, transparent 6px)`,
+                backgroundImage: `repeating-linear-gradient(45deg, ${gapColor}44, ${gapColor}44 3px, transparent 3px, transparent 6px)`,
               }}
             />
           </Tooltip>
         )}
       </Box>
 
-      {/* completion marker line + tick */}
       <Box sx={{ position: 'relative', height: 0 }}>
         <Tooltip title={`Completion ${percent(completion)}`} arrow>
           <Box
@@ -68,7 +57,7 @@ export default function HealthGauge({ burn, completion, status, height = 10, sho
               left: `calc(${c}% - 1px)`,
               width: 2,
               height: height + 8,
-              bgcolor: '#1A2233',
+              bgcolor: 'rgba(229,238,249,0.92)',
               borderRadius: 1,
             }}
           />

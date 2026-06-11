@@ -12,8 +12,9 @@ import {
   DialogContentText,
   DialogActions,
 } from '@mui/material';
+import { command, glass } from '../theme';
 
-export function StatCard({ label, value, sub, accent = '#1B2A4A', icon }) {
+export function StatCard({ label, value, sub, accent = command.teal, icon }) {
   return (
     <Card sx={{ height: '100%' }}>
       <CardContent>
@@ -21,9 +22,23 @@ export function StatCard({ label, value, sub, accent = '#1B2A4A', icon }) {
           <Typography variant="overline" color="text.secondary">
             {label}
           </Typography>
-          {icon && <Box sx={{ color: accent, display: 'flex' }}>{icon}</Box>}
+          {icon && (
+            <Box
+              sx={{
+                color: accent,
+                display: 'grid',
+                placeItems: 'center',
+                width: 36,
+                height: 36,
+                borderRadius: 2,
+                ...glass.inset,
+              }}
+            >
+              {icon}
+            </Box>
+          )}
         </Stack>
-        <Typography variant="h4" className="tnum" sx={{ mt: 0.5, color: accent }}>
+        <Typography variant="h4" className="tnum" sx={{ mt: 0.5, color: accent, lineHeight: 1.08 }}>
           {value}
         </Typography>
         {sub && (
@@ -65,9 +80,9 @@ export function EmptyState({ title, description, action }) {
         textAlign: 'center',
         py: 8,
         px: 2,
-        border: '1px dashed rgba(27,42,74,0.2)',
+        border: '1px dashed rgba(125,249,255,0.24)',
         borderRadius: 2,
-        bgcolor: '#FBFBFC',
+        ...glass.inset,
       }}
     >
       <Typography variant="h6" sx={{ mb: 0.5 }}>

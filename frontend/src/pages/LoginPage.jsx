@@ -76,7 +76,7 @@ export default function LoginPage() {
       </Typography>
 
       {USE_MOCK && (
-        <Box sx={{ mt: 3, p: 1.5, bgcolor: '#FBFBFC', border: '1px dashed rgba(27,42,74,0.2)', borderRadius: 1.5 }}>
+        <Box sx={{ mt: 3, p: 1.5, bgcolor: 'rgba(15,23,41,0.52)', border: '1px dashed rgba(125,249,255,0.24)', borderRadius: 1.5 }}>
           <Typography variant="caption" color="text.secondary">
             Demo sign-in is pre-filled: <strong>admin@acme.com</strong> / <strong>admin123</strong>
           </Typography>

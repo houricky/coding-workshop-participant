@@ -7,6 +7,7 @@ import RagChip from './RagChip';
 import HealthGauge from './HealthGauge';
 import { computeRag } from '../utils/rag';
 import { percent } from '../utils/format';
+import { glass } from '../theme';
 
 const STAGES = ['Planning', 'In progress', 'On hold', 'Completed'];
 const empty = { name: '', description: '', stage: 'Planning', project_manager_id: '', start_date: '', end_date: '', allocated_budget: 0, actual_completion_percent: 0 };
@@ -84,7 +85,7 @@ export default function ProjectFormDialog({ open, initial, managerOptions = [], 
             </Grid>
           </Grid>
 
-          <Box sx={{ bgcolor: '#FBFBFC', border: '1px solid rgba(27,42,74,0.1)', borderRadius: 1.5, p: 2 }}>
+          <Box sx={{ ...glass.inset, borderRadius: 1.5, p: 2 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
               <Typography variant="caption" color="text.secondary">Projected status</Typography>
               <RagChip status={preview.status} withLabel />

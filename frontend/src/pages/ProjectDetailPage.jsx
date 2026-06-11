@@ -175,7 +175,7 @@ export default function ProjectDetailPage() {
                     <TableRow key={a.id} hover>
                       <TableCell>
                         <Stack direction="row" spacing={1} alignItems="center">
-                          <Avatar sx={{ width: 28, height: 28, fontSize: 12, bgcolor: 'primary.light' }}>{initials(a.employee?.name)}</Avatar>
+                          <Avatar sx={{ width: 28, height: 28, fontSize: 12 }}>{initials(a.employee?.name)}</Avatar>
                           <Link component="button" underline="hover" onClick={() => navigate(`/employees/${a.employee_id}`)} sx={{ textAlign: 'left' }}>
                             {a.employee?.name}
                           </Link>

@@ -1,5 +1,6 @@
 import { Box, Typography, Stack } from '@mui/material';
 import HealthGauge from './HealthGauge';
+import { command, glass } from '../theme';
 
 // Split auth screen: a branded panel that demonstrates the product's signature
 // gauge, beside the form. The left panel collapses on small screens.
@@ -12,20 +13,20 @@ export default function AuthShell({ children }) {
           display: { xs: 'none', md: 'flex' },
           flexDirection: 'column',
           justifyContent: 'space-between',
-          bgcolor: 'primary.main',
-          color: '#fff',
+          bgcolor: command.bg,
+          color: 'text.primary',
           p: 6,
           backgroundImage:
-            'radial-gradient(900px 400px at 0% 0%, rgba(46,125,91,0.25), transparent), radial-gradient(700px 400px at 100% 100%, rgba(201,133,43,0.22), transparent)',
+            'radial-gradient(900px 480px at 0% 0%, rgba(56,189,248,0.10), transparent), linear-gradient(180deg, rgba(15,23,41,0.96), rgba(8,13,24,0.96))',
         }}
       >
         <Stack direction="row" alignItems="center" spacing={1.25}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-            {['#C4453D', '#C9852B', '#2E7D5B'].map((c) => (
+            {['#FF5C7A', '#F6C85F', '#36F59B'].map((c) => (
               <Box key={c} sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: c }} />
             ))}
           </Box>
-          <Typography sx={{ fontWeight: 700, fontFamily: '"Spline Sans", sans-serif', fontSize: 20 }}>
+          <Typography sx={{ fontWeight: 800, fontFamily: '"Inter", sans-serif', fontSize: 20 }}>
             ACME
           </Typography>
         </Stack>
@@ -38,7 +39,7 @@ export default function AuthShell({ children }) {
             Progress + budget burn + hours used, in one health view. Red, Amber, Green — no task
             boards, just portfolio truth.
           </Typography>
-          <Box sx={{ bgcolor: 'rgba(255,255,255,0.08)', borderRadius: 2, p: 2.5 }}>
+          <Box sx={{ ...glass.panel, borderRadius: 2, p: 2.5 }}>
             <Typography variant="caption" sx={{ opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               Billing Migration · At risk
             </Typography>

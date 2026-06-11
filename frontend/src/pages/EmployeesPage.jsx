@@ -122,7 +122,7 @@ export default function EmployeesPage() {
                   <TableRow key={e.id} hover sx={{ cursor: 'pointer' }} onClick={() => navigate(`/employees/${e.id}`)}>
                     <TableCell>
                       <Stack direction="row" spacing={1.5} alignItems="center">
-                        <Avatar sx={{ bgcolor: 'primary.light', fontSize: 14 }}>{initials(e.name)}</Avatar>
+                        <Avatar sx={{ fontSize: 14 }}>{initials(e.name)}</Avatar>
                         <Box>
                           <Box sx={{ fontWeight: 600 }}>{e.name}</Box>
                           <Box sx={{ fontSize: 12.5, color: 'text.secondary' }}>{e.title}</Box>

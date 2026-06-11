@@ -17,6 +17,11 @@ const uid = (() => {
   return () => String(++n);
 })();
 const clone = (v) => JSON.parse(JSON.stringify(v));
+const DELIVERABLE_STATUS_LABELS = {
+  pending: 'Pending',
+  in_progress: 'In progress',
+  completed: 'Completed',
+};
 
 // --- Seed data -------------------------------------------------------------
 const db = {
@@ -143,6 +148,26 @@ function deriveDeliverable(d) {
     employee_id: d.assigned_employee_id,
     employee,
     project: project ? { id: project.id, name: project.name, stage: project.stage } : null,
+  };
+}
+
+function projectBurnRow(p) {
+  return {
+    id: p.id,
+    name: p.name,
+    stage: p.stage,
+    rag_status: p.rag_status,
+    allocated_budget: p.allocated_budget,
+    budget_used: p.budget_used,
+    budget_remaining: Math.max(p.allocated_budget - p.budget_used, 0),
+    allocated_hours: p.allocated_hours,
+    hours_used: p.hours_used,
+    hours_remaining: Math.max(p.allocated_hours - p.hours_used, 0),
+    budget_used_percent: p.budget_used_percent,
+    hours_used_percent: p.hours_used_percent,
+    burn_percent: p.burn_percent,
+    completion_percent: p.actual_completion_percent,
+    progress_gap: p.progress_gap,
   };
 }
 
@@ -466,22 +491,57 @@ export const mockBackend = {
     const employees = db.employees.map(deriveEmployee);
     const byStatus = { Green: 0, Amber: 0, Red: 0 };
     const activeByStatus = { Green: 0, Amber: 0, Red: 0 };
+    const stageCounts = new Map();
+    const deliverableStatusCounts = new Map();
     const activeProjects = projects.filter((p) => {
       const stage = String(p.stage || '').toLowerCase();
       return stage === 'active' || stage === 'in progress';
     });
     projects.forEach((p) => { byStatus[p.rag_status] += 1; });
     activeProjects.forEach((p) => { activeByStatus[p.rag_status] += 1; });
+    projects.forEach((p) => {
+      stageCounts.set(p.stage, (stageCounts.get(p.stage) || 0) + 1);
+    });
+    db.deliverables.forEach((d) => {
+      const label = DELIVERABLE_STATUS_LABELS[d.status] || d.status;
+      deliverableStatusCounts.set(label, (deliverableStatusCounts.get(label) || 0) + 1);
+    });
+    const totalAllocatedBudget = projects.reduce((s, p) => s + p.allocated_budget, 0);
+    const totalBudgetUsed = projects.reduce((s, p) => s + p.budget_used, 0);
+    const totalAllocatedHours = projects.reduce((s, p) => s + p.allocated_hours, 0);
+    const totalHoursUsed = projects.reduce((s, p) => s + p.hours_used, 0);
     return {
       project_count: activeProjects.length,
       active_project_count: activeProjects.length,
       total_project_count: projects.length,
       rag_breakdown: byStatus,
       active_rag_breakdown: activeByStatus,
-      total_allocated_budget: projects.reduce((s, p) => s + p.allocated_budget, 0),
-      total_budget_used: projects.reduce((s, p) => s + p.budget_used, 0),
-      total_allocated_hours: projects.reduce((s, p) => s + p.allocated_hours, 0),
-      total_hours_used: projects.reduce((s, p) => s + p.hours_used, 0),
+      stage_breakdown: Array.from(stageCounts, ([stage, count]) => ({ stage, count })),
+      deliverable_status_breakdown: Array.from(deliverableStatusCounts, ([status, count]) => ({ status, count })),
+      project_burn: projects
+        .map(projectBurnRow)
+        .sort((a, b) => b.burn_percent - a.burn_percent || a.name.localeCompare(b.name)),
+      team_utilization: employees
+        .map((e) => ({
+          id: e.id,
+          name: e.name,
+          role: e.role,
+          department: e.department,
+          allocated_hours: e.allocated_hours,
+          capacity_hours: e.capacity_hours,
+          utilization_percent: e.utilization_percent,
+          overallocated: e.overallocated,
+          project_count: e.project_count,
+        }))
+        .sort((a, b) => b.utilization_percent - a.utilization_percent || a.name.localeCompare(b.name)),
+      total_allocated_budget: totalAllocatedBudget,
+      total_budget_used: totalBudgetUsed,
+      total_budget_remaining: Math.max(totalAllocatedBudget - totalBudgetUsed, 0),
+      budget_used_percent: totalAllocatedBudget ? (totalBudgetUsed / totalAllocatedBudget) * 100 : 0,
+      total_allocated_hours: totalAllocatedHours,
+      total_hours_used: totalHoursUsed,
+      total_hours_remaining: Math.max(totalAllocatedHours - totalHoursUsed, 0),
+      hours_used_percent: totalAllocatedHours ? (totalHoursUsed / totalAllocatedHours) * 100 : 0,
       overallocated_employees: employees.filter((e) => e.overallocated).length,
       total_deliverables: db.deliverables.length,
       completed_deliverables: db.deliverables.filter((d) => d.status === 'completed').length,
