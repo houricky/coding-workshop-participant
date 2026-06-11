@@ -36,8 +36,7 @@ export default function AuthShell({ children }) {
             See which projects are burning faster than they&rsquo;re finishing.
           </Typography>
           <Typography sx={{ opacity: 0.85, mb: 4 }}>
-            Progress + budget burn + hours used, in one health view. Red, Amber, Green — no task
-            boards, just portfolio truth.
+            Visualize progress and identify at-risk initiatives before it&rsquo;s too late. Manage your portfolio with confidence and keep everything on track.
           </Typography>
           <Box sx={{ ...glass.panel, borderRadius: 2, p: 2.5 }}>
             <Typography variant="caption" sx={{ opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
