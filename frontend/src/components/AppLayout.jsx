@@ -220,6 +220,7 @@ export default function AppLayout() {
               </Typography>
             </Box>
             <Divider />
+            <MenuItem onClick={() => { setAnchorEl(null); navigate('/profile'); }}>My Profile</MenuItem>
             <MenuItem onClick={handleLogout}>Sign out</MenuItem>
           </Menu>
         </Toolbar>

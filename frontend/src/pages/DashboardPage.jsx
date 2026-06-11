@@ -279,7 +279,7 @@ export default function DashboardPage() {
     });
     const relevantProjects = [...projectBurn]
       .sort((a, b) => urgencyScore(b) - urgencyScore(a) || a.fullName.localeCompare(b.fullName))
-      .slice(0, 3);
+      .slice(0, 5);
     const budgetPct = safeNumber(data.budget_used_percent) || pctOf(data.total_budget_used, data.total_allocated_budget);
     const hoursPct = safeNumber(data.hours_used_percent) || pctOf(data.total_hours_used, data.total_allocated_hours);
     const deliverablePct = pctOf(data.completed_deliverables, data.total_deliverables);
