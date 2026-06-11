@@ -541,6 +541,32 @@ ON CONFLICT (id) DO UPDATE SET
     depends_on_project_id = EXCLUDED.depends_on_project_id,
     dependency_type = EXCLUDED.dependency_type;
 
+-- Demo deliverable dependency tree (cross-project).
+-- Chain: Platform Modernization "Legacy API migration plan" (in_progress)
+--   -> Customer Portal "Authentication integration"
+--   -> Data Warehouse "Warehouse architecture brief"
+--   -> Data Warehouse "Analytics access model".
+-- Because the root upstream is in_progress, every downstream dependent auto-stalls,
+-- propagating across projects and demoting Customer Portal and Data Warehouse RAG.
+-- Completing the root ('888...802') recovers the direct dependent back to in_progress.
+INSERT INTO deliverable_dependencies (id, deliverable_id, depends_on_deliverable_id)
+VALUES
+    ('99999999-9999-9999-9999-999999999901',
+     '88888888-8888-8888-8888-888888888805',
+     '88888888-8888-8888-8888-888888888802'),
+    ('99999999-9999-9999-9999-999999999902',
+     '88888888-8888-8888-8888-888888888807',
+     '88888888-8888-8888-8888-888888888805'),
+    ('99999999-9999-9999-9999-999999999903',
+     '88888888-8888-8888-8888-888888888809',
+     '88888888-8888-8888-8888-888888888807')
+ON CONFLICT (id) DO UPDATE SET
+    deliverable_id = EXCLUDED.deliverable_id,
+    depends_on_deliverable_id = EXCLUDED.depends_on_deliverable_id;
+
+-- Normalize auto-stalled state for all deliverables after (re)seeding dependencies.
+SELECT fn_recalc_deliverable_stalled(id) FROM project_deliverables;
+
 -- Recalculate RAG for all demo projects
 SELECT fn_refresh_budget_used(project_id) FROM project_budgets;
 SELECT fn_update_project_rag(id) FROM projects;

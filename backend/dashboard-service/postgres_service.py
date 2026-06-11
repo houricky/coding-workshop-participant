@@ -26,6 +26,7 @@ def _deliverable_status_label(status: str | None) -> str:
         "pending": "Pending",
         "in_progress": "In progress",
         "completed": "Completed",
+        "stalled": "Stalled",
     }.get(str(status or "").lower(), str(status or "Unknown").replace("_", " ").title())
 
 
@@ -230,6 +231,7 @@ def get_portfolio_dashboard(allocated_employee_id: str | None = None) -> dict:
             f"""
             SELECT COUNT(*) AS total_deliverables,
                    COUNT(*) FILTER (WHERE status = 'completed') AS completed_deliverables,
+                   COUNT(*) FILTER (WHERE status = 'stalled') AS stalled_deliverables,
                    COUNT(*) FILTER (WHERE assigned_employee_id IS NULL) AS unassigned_deliverables
             FROM project_deliverables pd
             {deliverable_where}
@@ -237,6 +239,39 @@ def get_portfolio_dashboard(allocated_employee_id: str | None = None) -> dict:
             deliverable_params,
         )
         deliverable_totals = cur.fetchone() or {}
+
+        # Cross-project blocking impact: downstream deliverables blocked by another project's
+        # incomplete upstream work, grouped by the impacted (downstream) project.
+        impact_scope = ""
+        impact_params: list = []
+        if allocated_employee_id:
+            impact_scope = """
+              AND EXISTS (
+                  SELECT 1 FROM project_resource_allocations scope_pra
+                  WHERE scope_pra.project_id = down.project_id
+                    AND scope_pra.employee_id = %s
+              )
+            """
+            impact_params = [allocated_employee_id]
+        cur.execute(
+            f"""
+            SELECT down.project_id,
+                   dp.name AS project_name,
+                   dp.rag_status AS rag_status,
+                   COUNT(DISTINCT down.id) AS blocked_deliverable_count
+            FROM deliverable_dependencies dd
+            JOIN project_deliverables up ON up.id = dd.depends_on_deliverable_id
+            JOIN project_deliverables down ON down.id = dd.deliverable_id
+            JOIN projects dp ON dp.id = down.project_id
+            WHERE up.status <> 'completed'
+              AND up.project_id <> down.project_id
+              {impact_scope}
+            GROUP BY down.project_id, dp.name, dp.rag_status
+            ORDER BY blocked_deliverable_count DESC, dp.name
+            """,
+            impact_params,
+        )
+        impact_rows = cur.fetchall()
 
     rag_breakdown = {"Green": 0, "Amber": 0, "Red": 0}
     for row in rag_rows:
@@ -259,6 +294,16 @@ def get_portfolio_dashboard(allocated_employee_id: str | None = None) -> dict:
             "status": _deliverable_status_label(row.get("status")),
             "count": int(row.get("count") or 0),
         })
+
+    impacted_projects = []
+    for row in impact_rows:
+        impacted_projects.append({
+            "id": row.get("project_id"),
+            "name": row.get("project_name"),
+            "rag_status": _rag_label(row.get("rag_status")),
+            "blocked_deliverable_count": int(row.get("blocked_deliverable_count") or 0),
+        })
+    stalls_impacting_other_projects = sum(p["blocked_deliverable_count"] for p in impacted_projects)
 
     active_project_count = len([p for p in projects if str(p.get("stage") or "").lower() == "active"])
     total_project_count = len(projects)
@@ -288,7 +333,10 @@ def get_portfolio_dashboard(allocated_employee_id: str | None = None) -> dict:
         "overallocated_employees": len([employee for employee in team_utilization if employee.get("overallocated")]),
         "total_deliverables": int(deliverable_totals.get("total_deliverables") or 0),
         "completed_deliverables": int(deliverable_totals.get("completed_deliverables") or 0),
+        "stalled_deliverables": int(deliverable_totals.get("stalled_deliverables") or 0),
         "unassigned_deliverables": int(deliverable_totals.get("unassigned_deliverables") or 0),
+        "stalls_impacting_other_projects": stalls_impacting_other_projects,
+        "impacted_projects": impacted_projects,
         "at_risk_projects": [p for p in projects if p["rag_status"] == "Red"],
         "projects": projects,
     }

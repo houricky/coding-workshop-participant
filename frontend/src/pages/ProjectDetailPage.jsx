@@ -20,8 +20,8 @@ import { money, hours, percent, formatDate, initials, clampPercent } from '../ut
 import { ragMeta } from '../theme';
 
 const projectRoleLabel = (role) => ({ manager: 'Manager', employee: 'Employee' }[role] || 'Employee');
-const deliverableStatusLabel = (status) => ({ pending: 'Pending', in_progress: 'In progress', completed: 'Completed' }[status] || status || 'Pending');
-const deliverableStatusColor = (status) => ({ completed: 'success', in_progress: 'warning', pending: 'default' }[status] || 'default');
+const deliverableStatusLabel = (status) => ({ pending: 'Pending', in_progress: 'In progress', stalled: 'Stalled', completed: 'Completed' }[status] || status || 'Pending');
+const deliverableStatusColor = (status) => ({ completed: 'success', in_progress: 'warning', stalled: 'error', pending: 'default' }[status] || 'default');
 
 function MetricRow({ label, used, allocated, formatter, accentOver = 90 }) {
   const pct = allocated > 0 ? (used / allocated) * 100 : 0;
@@ -258,7 +258,13 @@ export default function ProjectDetailPage() {
               <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={1.5}>
                 <Typography variant="overline" color="text.secondary">Deliverables</Typography>
                 {canLeadProject && (
-                  <Button size="small" variant="contained" startIcon={<AddIcon />} onClick={() => openDeliverableDialog()}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<AddIcon fontSize="small" />}
+                    onClick={() => openDeliverableDialog()}
+                    sx={{ minHeight: 30, px: 1.25, borderRadius: 1.5 }}
+                  >
                     Add deliverable
                   </Button>
                 )}
@@ -284,6 +290,20 @@ export default function ProjectDetailPage() {
                           <Typography variant="body2">{deliverable.title}</Typography>
                           {deliverable.description && (
                             <Typography variant="caption" color="text.secondary">{deliverable.description}</Typography>
+                          )}
+                          {deliverable.blocked_by?.filter((node) => node.status !== 'completed').map((node) => (
+                            <Stack key={node.dependency_id} direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.5, cursor: 'pointer' }}
+                              onClick={() => node.project_id && navigate(`/projects/${node.project_id}`)}>
+                              <LinkOutlinedIcon fontSize="inherit" color="error" />
+                              <Typography variant="caption" color="error">
+                                Blocked by {node.title}{node.project_id !== p.id ? ` · ${node.project_name}` : ''}
+                              </Typography>
+                            </Stack>
+                          ))}
+                          {deliverable.blocks_count > 0 && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                              Blocks {deliverable.blocks_count} downstream
+                            </Typography>
                           )}
                         </Box>
                       </TableCell>

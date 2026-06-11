@@ -33,6 +33,10 @@ def _project_summary(row: dict | None) -> dict | None:
         "team_size": int(row.get("allocation_count") or 0),
         "manager_count": int(row.get("manager_count") or (1 if row.get("project_manager_id") else 0)),
         "allocated_cost": allocated_hours,
+        "deliverable_count": int(row.get("deliverable_count") or 0),
+        "completed_deliverable_count": int(row.get("completed_deliverable_count") or 0),
+        "stalled_deliverable_count": int(row.get("stalled_deliverable_count") or 0),
+        "blocking_impact_count": int(row.get("blocking_impact_count") or 0),
     }
 
 
@@ -108,6 +112,52 @@ def _deliverable(row: dict) -> dict:
         "employee_id": assigned_employee_id,
         "employee": employee,
     }
+
+
+def _dep_node(row: dict) -> dict:
+    return {
+        "dependency_id": row.get("dependency_id"),
+        "id": row.get("id"),
+        "title": row.get("title"),
+        "status": row.get("status"),
+        "project_id": row.get("project_id"),
+        "project_name": row.get("project_name"),
+    }
+
+
+def _attach_deliverable_dependencies(cur, deliverable: dict) -> dict:
+    deliverable_id = deliverable.get("id")
+    cur.execute(
+        """
+        SELECT dd.id AS dependency_id, up.id, up.title, up.status,
+               up.project_id, p.name AS project_name
+        FROM deliverable_dependencies dd
+        JOIN project_deliverables up ON up.id = dd.depends_on_deliverable_id
+        LEFT JOIN projects p ON p.id = up.project_id
+        WHERE dd.deliverable_id = %s
+        ORDER BY up.title
+        """,
+        (deliverable_id,),
+    )
+    blocked_by = [_dep_node(row) for row in cur.fetchall()]
+    cur.execute(
+        """
+        SELECT dd.id AS dependency_id, down.id, down.title, down.status,
+               down.project_id, p.name AS project_name
+        FROM deliverable_dependencies dd
+        JOIN project_deliverables down ON down.id = dd.deliverable_id
+        LEFT JOIN projects p ON p.id = down.project_id
+        WHERE dd.depends_on_deliverable_id = %s
+        ORDER BY down.title
+        """,
+        (deliverable_id,),
+    )
+    blocks = [_dep_node(row) for row in cur.fetchall()]
+    deliverable["blocked_by"] = blocked_by
+    deliverable["blocks"] = blocks
+    deliverable["blocks_count"] = len(blocks)
+    deliverable["is_blocked"] = any(node.get("status") != "completed" for node in blocked_by)
+    return deliverable
 
 
 def list_projects(
@@ -215,6 +265,8 @@ def get_project(project_id: str) -> dict | None:
             (project_id,),
         )
         project["deliverables"] = [_deliverable(row) for row in cur.fetchall()]
+        for deliverable in project["deliverables"]:
+            _attach_deliverable_dependencies(cur, deliverable)
 
         cur.execute(
             """

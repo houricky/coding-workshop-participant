@@ -7,12 +7,17 @@ from auth_jwt import get_auth_context
 from http_router import parse_event
 from postgres_service import (
     create_deliverable,
+    create_deliverable_dependency,
     delete_deliverable,
+    delete_deliverable_dependency,
     get_deliverable,
+    get_deliverable_dependency,
     is_employee_allocated,
     is_project_lead,
+    list_deliverable_dependencies,
     list_deliverables,
     update_deliverable,
+    update_deliverable_dependency,
 )
 from responses import error_response, json_response, no_content, preflight_response
 from validators import is_valid_uuid, require_fields
@@ -21,7 +26,10 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 SERVICE_NAME = "deliverable-service"
+# Statuses a client may write. 'stalled' is computed by the database, never set directly.
 VALID_STATUSES = {"pending", "in_progress", "completed"}
+# Statuses a client may filter by (includes the computed 'stalled').
+VALID_FILTER_STATUSES = VALID_STATUSES | {"stalled"}
 
 
 def handler(event=None, context=None):
@@ -41,6 +49,23 @@ def handler(event=None, context=None):
                 return list_all(query, auth)
             if method == "POST":
                 return create(body, auth)
+            return error_response(405, "method_not_allowed", f"{method} not allowed")
+
+        if path == "/dependencies":
+            if method == "GET":
+                return list_deps(query, auth)
+            if method == "POST":
+                return create_dep(body, auth)
+            return error_response(405, "method_not_allowed", f"{method} not allowed")
+
+        if path.startswith("/dependencies/"):
+            dependency_id = path[len("/dependencies/"):]
+            if not is_valid_uuid(dependency_id):
+                return error_response(400, "validation_error", "Invalid dependency ID")
+            if method == "PUT":
+                return update_dep(dependency_id, body, auth)
+            if method == "DELETE":
+                return remove_dep(dependency_id, auth)
             return error_response(405, "method_not_allowed", f"{method} not allowed")
 
         if path.startswith("/") and len(path) > 1:
@@ -75,7 +100,7 @@ def list_all(query: dict, auth: dict):
         return error_response(400, "validation_error", "Invalid project_id")
     if employee_id and not is_valid_uuid(employee_id):
         return error_response(400, "validation_error", "Invalid employee_id")
-    if status and status not in VALID_STATUSES:
+    if status and status not in VALID_FILTER_STATUSES:
         return error_response(400, "validation_error", "Invalid deliverable status")
     allocated_employee_id = auth.get("employee_id") if auth.get("role") == "employee" else None
     deliverables = list_deliverables(project_id, employee_id, status, allocated_employee_id)
@@ -152,6 +177,73 @@ def remove(deliverable_id: str, auth: dict):
         return forbidden()
     if not delete_deliverable(deliverable_id):
         return error_response(404, "not_found", "Deliverable not found")
+    return no_content()
+
+
+def _can_manage_dependency(deliverable_id: str, auth: dict):
+    """Returns (deliverable, error_response). Manager must lead the dependent's project."""
+    deliverable = get_deliverable(deliverable_id)
+    if not deliverable:
+        return None, error_response(404, "not_found", "Deliverable not found")
+    if auth.get("role") == "employee":
+        return None, forbidden()
+    if auth.get("role") == "manager" and not is_project_lead(deliverable["project_id"], auth.get("employee_id")):
+        return None, forbidden()
+    return deliverable, None
+
+
+def list_deps(query: dict, auth: dict):
+    deliverable_id = query.get("deliverable_id")
+    if deliverable_id and not is_valid_uuid(deliverable_id):
+        return error_response(400, "validation_error", "Invalid deliverable_id")
+    dependencies = list_deliverable_dependencies(deliverable_id)
+    return json_response(200, {"dependencies": dependencies, "count": len(dependencies)})
+
+
+def create_dep(body: dict, auth: dict):
+    body = dict(body or {})
+    missing = require_fields(body, ["deliverable_id", "depends_on_deliverable_id"])
+    if missing:
+        return error_response(400, "validation_error", "Missing required fields", {"fields": missing})
+    if not is_valid_uuid(body.get("deliverable_id")):
+        return error_response(400, "validation_error", "Invalid deliverable_id")
+    if not is_valid_uuid(body.get("depends_on_deliverable_id")):
+        return error_response(400, "validation_error", "Invalid depends_on_deliverable_id")
+    _, denied = _can_manage_dependency(body["deliverable_id"], auth)
+    if denied:
+        return denied
+    if not get_deliverable(body["depends_on_deliverable_id"]):
+        return error_response(404, "not_found", "Upstream deliverable not found")
+    dependency = create_deliverable_dependency(body)
+    return json_response(201, {"dependency": dependency})
+
+
+def update_dep(dependency_id: str, body: dict, auth: dict):
+    body = dict(body or {})
+    existing = get_deliverable_dependency(dependency_id)
+    if not existing:
+        return error_response(404, "not_found", "Dependency not found")
+    for field in ("deliverable_id", "depends_on_deliverable_id"):
+        if field in body and not is_valid_uuid(body[field]):
+            return error_response(400, "validation_error", f"Invalid {field}")
+    _, denied = _can_manage_dependency(str(existing["deliverable_id"]), auth)
+    if denied:
+        return denied
+    dependency = update_deliverable_dependency(dependency_id, body)
+    if not dependency:
+        return error_response(404, "not_found", "Dependency not found")
+    return json_response(200, {"dependency": dependency})
+
+
+def remove_dep(dependency_id: str, auth: dict):
+    existing = get_deliverable_dependency(dependency_id)
+    if not existing:
+        return error_response(404, "not_found", "Dependency not found")
+    _, denied = _can_manage_dependency(str(existing["deliverable_id"]), auth)
+    if denied:
+        return denied
+    if not delete_deliverable_dependency(dependency_id):
+        return error_response(404, "not_found", "Dependency not found")
     return no_content()
 
 

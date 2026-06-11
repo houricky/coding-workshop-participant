@@ -24,10 +24,11 @@ const STATUSES = [
   { value: '', label: 'All statuses' },
   { value: 'pending', label: 'Pending' },
   { value: 'in_progress', label: 'In progress' },
+  { value: 'stalled', label: 'Stalled' },
   { value: 'completed', label: 'Completed' },
 ];
-const deliverableStatusLabel = (status) => ({ pending: 'Pending', in_progress: 'In progress', completed: 'Completed' }[status] || status || 'Pending');
-const deliverableStatusColor = (status) => ({ completed: 'success', in_progress: 'warning', pending: 'default' }[status] || 'default');
+const deliverableStatusLabel = (status) => ({ pending: 'Pending', in_progress: 'In progress', stalled: 'Stalled', completed: 'Completed' }[status] || status || 'Pending');
+const deliverableStatusColor = (status) => ({ completed: 'success', in_progress: 'warning', stalled: 'error', pending: 'default' }[status] || 'default');
 
 export default function DeliverablesPage() {
   const navigate = useNavigate();
@@ -183,6 +184,21 @@ export default function DeliverablesPage() {
                         <Typography variant="body2">{deliverable.title}</Typography>
                         {deliverable.description && (
                           <Typography variant="caption" color="text.secondary">{deliverable.description}</Typography>
+                        )}
+                        {(deliverable.blocked_by?.length > 0 || deliverable.blocks_count > 0) && (
+                          <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
+                            {deliverable.blocked_by?.filter((node) => node.status !== 'completed').length > 0 && (
+                              <Tooltip title={deliverable.blocked_by.filter((node) => node.status !== 'completed').map((node) => `${node.title} (${node.project_name})`).join(', ')}>
+                                <Chip size="small" color="error" variant="outlined"
+                                  label={`Blocked by ${deliverable.blocked_by.filter((node) => node.status !== 'completed').length}`} />
+                              </Tooltip>
+                            )}
+                            {deliverable.blocks_count > 0 && (
+                              <Tooltip title={deliverable.blocks.map((node) => `${node.title} (${node.project_name})`).join(', ')}>
+                                <Chip size="small" color="warning" variant="outlined" label={`Blocks ${deliverable.blocks_count}`} />
+                              </Tooltip>
+                            )}
+                          </Stack>
                         )}
                       </Box>
                     </TableCell>
